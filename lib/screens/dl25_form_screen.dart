@@ -6,7 +6,7 @@ import '../widgets/app_drawer.dart';
 /// DL25 Digital Test Report Form
 /// Programmatic recreation of the DVSA DL25 driving test report
 class DL25FormScreen extends StatefulWidget {
-  const DL25FormScreen({Key? key}) : super(key: key);
+  const DL25FormScreen({super.key});
 
   @override
   State<DL25FormScreen> createState() => _DL25FormScreenState();
@@ -31,13 +31,13 @@ class _DL25FormScreenState extends State<DL25FormScreen> {
   String _testResult = 'Pass';
 
   // Driving Faults (up to 15 allowed)
-  Map<String, int> _drivingFaults = {};
+  final Map<String, int> _drivingFaults = {};
 
   // Serious Faults
-  Set<String> _seriousFaults = {};
+  final Set<String> _seriousFaults = {};
 
   // Dangerous Faults
-  Set<String> _dangerousFaults = {};
+  final Set<String> _dangerousFaults = {};
 
   // Maneuvers
   String? _selectedManeuver;
@@ -422,7 +422,7 @@ class _DL25FormScreenState extends State<DL25FormScreen> {
                     child: ElevatedButton.icon(
                       onPressed: _saveForm,
                       icon: const Icon(Icons.save),
-                      label: const Text('Save Form'),
+                      label: const Text('Save Test'),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.green,
                         foregroundColor: Colors.white,
@@ -435,7 +435,7 @@ class _DL25FormScreenState extends State<DL25FormScreen> {
                     child: OutlinedButton.icon(
                       onPressed: _clearForm,
                       icon: const Icon(Icons.clear),
-                      label: const Text('Clear'),
+                      label: const Text('Reset Test'),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: Colors.red,
                         padding: const EdgeInsets.symmetric(vertical: 16),
@@ -449,36 +449,6 @@ class _DL25FormScreenState extends State<DL25FormScreen> {
             ],
           ),
         ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildHeader() {
-    return Card(
-      elevation: 4,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      color: Colors.purple[400],
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          children: [
-            const Icon(Icons.description, size: 48, color: Colors.white),
-            const SizedBox(height: 8),
-            const Text(
-              'DVSA Driving Test Report',
-              style: TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-              ),
-            ),
-            const SizedBox(height: 4),
-            const Text(
-              'DL25 Form',
-              style: TextStyle(fontSize: 16, color: Colors.white70),
-            ),
-          ],
         ),
       ),
     );
@@ -589,78 +559,7 @@ class _DL25FormScreenState extends State<DL25FormScreen> {
     );
   }
 
-  Widget _buildSectionCard(String title, IconData icon, List<Widget> children) {
-    return Card(
-      elevation: 3,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(icon, color: Colors.purple[600], size: 24),
-                const SizedBox(width: 12),
-                Text(
-                  title,
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.purple[700],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            ...children,
-          ],
-        ),
-      ),
-    );
-  }
 
-  Widget _buildFaultsSection(bool isTablet) {
-    return Card(
-      elevation: 3,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(Icons.assignment, color: Colors.purple[600], size: 24),
-                const SizedBox(width: 12),
-                Text(
-                  'Driving Test Faults',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.purple[700],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-
-            const Text(
-              'Tap to mark faults:',
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
-            ),
-            const Text(
-              'D = Driving (1-3 taps) | S = Serious | X = Dangerous',
-              style: TextStyle(fontSize: 12, color: Colors.grey),
-            ),
-            const SizedBox(height: 16),
-
-            isTablet ? _buildTabletLayout() : _buildMobileLayout(),
-          ],
-        ),
-      ),
-    );
-  }
 
   Widget _buildFaultsSummary() {
     return Column(
@@ -755,7 +654,7 @@ class _DL25FormScreenState extends State<DL25FormScreen> {
               _buildManeuverSection(),
               const SizedBox(height: 8),
               ..._faultCategoriesColumns[0].map((category) =>
-                  _buildFaultRow(category)).toList(),
+                  _buildFaultRow(category)),
             ],
           ),
         ),
@@ -764,7 +663,7 @@ class _DL25FormScreenState extends State<DL25FormScreen> {
           child: Column(
             children: [
               ..._faultCategoriesColumns[1].map((category) =>
-                  _buildFaultRow(category)).toList(),
+                  _buildFaultRow(category)),
               const SizedBox(height: 8),
               _buildETASection(),
             ],
@@ -775,7 +674,7 @@ class _DL25FormScreenState extends State<DL25FormScreen> {
           child: Column(
             children: [
               ..._faultCategoriesColumns[2].map((category) =>
-                  _buildFaultRow(category)).toList(),
+                  _buildFaultRow(category)),
               const SizedBox(height: 8),
               _buildECOSection(),
             ],
@@ -791,7 +690,7 @@ class _DL25FormScreenState extends State<DL25FormScreen> {
         _buildManeuverSection(),
         const SizedBox(height: 8),
         ..._faultCategoriesColumns.expand((column) => column).map((category) =>
-            _buildFaultRow(category)).toList(),
+            _buildFaultRow(category)),
       ],
     );
   }
@@ -1029,7 +928,7 @@ class _DL25FormScreenState extends State<DL25FormScreen> {
               Icon(Icons.compare_arrows, color: Colors.amber[800], size: 20),
               const SizedBox(width: 8),
               Text(
-                'MANEUVER',
+                'Manoeuvres',
                 style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.bold,
@@ -1040,9 +939,9 @@ class _DL25FormScreenState extends State<DL25FormScreen> {
           ),
           const SizedBox(height: 12),
           DropdownButtonFormField<String>(
-            value: _selectedManeuver,
+            initialValue: _selectedManeuver,
             decoration: InputDecoration(
-              labelText: 'Select Maneuver',
+              labelText: 'Manoeuvre',
               labelStyle: const TextStyle(fontSize: 11),
               border: const OutlineInputBorder(),
               filled: true,
@@ -1115,15 +1014,17 @@ class _DL25FormScreenState extends State<DL25FormScreen> {
             onSeriousTap: () {
               setState(() {
                 _maneuverObservationSerious = !_maneuverObservationSerious;
-                if (_maneuverObservationSerious)
+                if (_maneuverObservationSerious) {
                   _maneuverObservationDangerous = false;
+                }
               });
             },
             onDangerousTap: () {
               setState(() {
                 _maneuverObservationDangerous = !_maneuverObservationDangerous;
-                if (_maneuverObservationDangerous)
+                if (_maneuverObservationDangerous) {
                   _maneuverObservationSerious = false;
+                }
               });
             },
           ),
@@ -1635,12 +1536,10 @@ class _AnimatedToggleButtonState extends State<_AnimatedToggleButton>
   late Animation<double> _fadeAnimation;
   late Animation<Offset> _slideAnimation;
   bool _showLabel = false;
-  bool _wasActive = false;
 
   @override
   void initState() {
     super.initState();
-    _wasActive = widget.isActive;
     _animationController = AnimationController(
       duration: const Duration(milliseconds: 800),
       vsync: this,
@@ -1663,7 +1562,6 @@ class _AnimatedToggleButtonState extends State<_AnimatedToggleButton>
     super.didUpdateWidget(oldWidget);
     if (oldWidget.isActive != widget.isActive) {
       _showAnimation(widget.isActive);
-      _wasActive = widget.isActive;
     }
   }
 

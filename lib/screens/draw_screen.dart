@@ -15,7 +15,7 @@ class Stroke {
 
 class DrawScreen extends StatefulWidget {
   final ImageGroup group;
-  const DrawScreen({required this.group, Key? key}) : super(key: key);
+  const DrawScreen({required this.group, super.key});
 
   @override
   State<DrawScreen> createState() => _DrawScreenState();

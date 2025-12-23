@@ -237,7 +237,7 @@ class _UserImageControlScreenState extends State<UserImageControlScreen> {
                           ),
                           const SizedBox(height: 16),
                           DropdownButtonFormField<String>(
-                            value: editCategory,
+                            initialValue: editCategory,
                             decoration: const InputDecoration(
                               labelText: 'Category',
                               border: OutlineInputBorder(),
@@ -530,7 +530,7 @@ class _UserImageControlScreenState extends State<UserImageControlScreen> {
                     children: [
                       Expanded(
                         child: DropdownButtonFormField<String>(
-                          value: _selectedCategory,
+                          initialValue: _selectedCategory,
                           decoration: InputDecoration(
                             labelText: 'Category',
                             prefixIcon: Icon(
@@ -663,8 +663,10 @@ class _UserImageControlScreenState extends State<UserImageControlScreen> {
                           .where((img) => img.category == category)
                           .toList();
 
-                      if (imagesInCategory.isEmpty) return const SizedBox
+                      if (imagesInCategory.isEmpty) {
+                        return const SizedBox
                           .shrink();
+                      }
 
                       return Card(
                         elevation: 3,
