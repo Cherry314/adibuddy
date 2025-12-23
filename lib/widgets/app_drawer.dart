@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import '../screens/image_selection_screen.dart';
 import '../screens/speed_checker_screen.dart';
 import '../screens/user_image_control_screen.dart';
-import '../screens/mock_test_screen.dart';
 import '../screens/dl25_form_screen.dart';
 import '../screens/settings_screen.dart';
+import '../screens/past_tests_screen.dart'; // <-- 1. IMPORT THE NEW SCREEN
 
 class AppDrawer extends StatelessWidget {
   final String currentRoute;
@@ -96,19 +96,6 @@ class AppDrawer extends StatelessWidget {
             ),
             _buildDrawerItem(
               context,
-              icon: Icons.quiz,
-              title: 'Mock Test',
-              route: '/mock-test',
-              isSelected: currentRoute == '/mock-test',
-              onTap: () {
-                Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute(builder: (_) => MockTestScreen()),
-                );
-              },
-            ),
-            _buildDrawerItem(
-              context,
               icon: Icons.description,
               title: 'DL25 Test Report',
               route: '/dl25-form',
@@ -116,11 +103,29 @@ class AppDrawer extends StatelessWidget {
               onTap: () {
                 Navigator.pushReplacement(
                   context,
-                  MaterialPageRoute(builder: (_) => DL25FormScreen()),
+                  MaterialPageRoute(builder: (_) => const DL25FormScreen()),
                 );
               },
             ),
-            Divider(thickness: 1, color: Colors.purple[200]),
+
+            // 2. ADD THE NEW "PAST TESTS" ITEM HERE
+            _buildDrawerItem(
+              context,
+              icon: Icons.history, // A history icon is suitable for past tests
+              title: 'Past Tests',
+              route: '/past-tests', // A new unique route name
+              isSelected: currentRoute == '/past-tests',
+              onTap: () {
+                // Use pushReplacement if it's a main screen, or push for a sub-screen
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(builder: (_) => const PastTestsScreen()),
+                );
+              },
+            ),
+
+            const Divider(thickness: 1, color: Colors.purple), // Use const for better performance
+
             _buildDrawerItem(
               context,
               icon: Icons.settings,
@@ -130,15 +135,15 @@ class AppDrawer extends StatelessWidget {
               onTap: () {
                 Navigator.pushReplacement(
                   context,
-                  MaterialPageRoute(builder: (_) => SettingsScreen()),
+                  MaterialPageRoute(builder: (_) => const SettingsScreen()),
                 );
               },
             ),
-            SizedBox(height: 20),
+            const SizedBox(height: 20),
             Padding(
               padding: const EdgeInsets.all(16.0),
               child: Text(
-                'Version 1.0.0',
+                'Version 1.0.0', // Example version
                 style: TextStyle(
                   color: Colors.purple[300],
                   fontSize: 12,
@@ -160,7 +165,7 @@ class AppDrawer extends StatelessWidget {
     required VoidCallback onTap,
   }) {
     return Container(
-      margin: EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2), // Use const
       decoration: BoxDecoration(
         color: isSelected ? Colors.purple[100] : Colors.transparent,
         borderRadius: BorderRadius.circular(8),
@@ -179,6 +184,9 @@ class AppDrawer extends StatelessWidget {
         ),
         selected: isSelected,
         onTap: onTap,
+        shape: RoundedRectangleBorder( // Adds a nice ripple effect shape
+          borderRadius: BorderRadius.circular(8),
+        ),
       ),
     );
   }

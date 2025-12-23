@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:intl/intl.dart';
+import 'package:uuid/uuid.dart';
 import '../widgets/app_drawer.dart';
+import '../models/test_result.dart';
+import '../services/database_service.dart';
+import '../services/email_service.dart';
 
 /// DL25 Digital Test Report Form
 /// Programmatic recreation of the DVSA DL25 driving test report
@@ -250,14 +254,185 @@ class _DL25FormScreenState extends State<DL25FormScreen> {
     }
   }
 
-  void _saveForm() {
-    if (_formKey.currentState!.validate()) {
+  Future<void> _saveForm() async {
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
+
+    if (_testDate == null || _testTime == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('DL25 form saved successfully!'),
-          backgroundColor: Colors.green,
+        const SnackBar(
+          content: Text('Please select test date and time'),
+          backgroundColor: Colors.red,
         ),
       );
+      return;
+    }
+
+    // Calculate if passed
+    final bool passed = totalDrivingFaults <= 15 &&
+        totalSeriousFaults == 0 &&
+        totalDangerousFaults == 0 &&
+        !_eyesightTestFailed;
+
+    // Create test result object
+    final testResult = TestResult(
+      id: const Uuid().v4(),
+      candidateName: _candidateNameController.text,
+      candidateEmail: _candidateEmailController.text,
+      testCenter: _testCenterController.text,
+      testDate: _testDate!,
+      testTime: '${_testTime!.hour.toString().padLeft(2, '0')}:${_testTime!
+          .minute.toString().padLeft(2, '0')}',
+      passed: passed,
+      drivingFaults: Map<String, int>.from(_drivingFaults),
+      seriousFaults: _seriousFaults.toList(),
+      dangerousFaults: _dangerousFaults.toList(),
+      selectedManeuver: _selectedManeuver,
+      maneuverControlFaults: _maneuverControlFaults,
+      maneuverObservationFaults: _maneuverObservationFaults,
+      maneuverControlSerious: _maneuverControlSerious,
+      maneuverControlDangerous: _maneuverControlDangerous,
+      maneuverObservationSerious: _maneuverObservationSerious,
+      maneuverObservationDangerous: _maneuverObservationDangerous,
+      eyesightTestFailed: _eyesightTestFailed,
+      eyesightTestCompleted: _eyesightTestCompleted,
+      showMeTellMeCompleted: _showMeTellMeCompleted,
+      controlledStopCompleted: _controlledStopCompleted,
+      accompaniedAS: _accompaniedAS,
+      accompaniedNS1: _accompaniedNS1,
+      accompaniedNS2: _accompaniedNS2,
+      accompaniedHSDS: _accompaniedHSDS,
+      etaCompleted: _etaCompleted,
+      etaPhysical: _etaPhysical,
+      etaVerbal: _etaVerbal,
+      ecoCompleted: _ecoCompleted,
+      ecoControl: _ecoControl,
+      ecoPlanning: _ecoPlanning,
+      savedAt: DateTime.now(),
+    );
+
+    // Show save dialog with email option
+    _showSaveDialog(testResult);
+  }
+
+  Future<void> _showSaveDialog(TestResult testResult) async {
+    bool sendEmail = false;
+
+    await showDialog(
+      context: context,
+      builder: (context) =>
+          StatefulBuilder(
+            builder: (context, setState) =>
+                AlertDialog(
+                  title: Row(
+                    children: [
+                      Icon(
+                        testResult.passed ? Icons.check_circle : Icons.cancel,
+                        color: testResult.passed ? Colors.green : Colors.red,
+                        size: 32,
+                      ),
+                      const SizedBox(width: 12),
+                      Text('Test ${testResult.passed ? "PASSED" : "FAILED"}'),
+                    ],
+                  ),
+                  content: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Candidate: ${testResult.candidateName}',
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 8),
+                      Text('Driving Faults: ${testResult
+                          .totalDrivingFaults}/15'),
+                      Text('Serious Faults: ${testResult.totalSeriousFaults}'),
+                      Text('Dangerous Faults: ${testResult
+                          .totalDangerousFaults}'),
+                      const SizedBox(height: 16),
+                      const Divider(),
+                      const SizedBox(height: 8),
+                      CheckboxListTile(
+                        title: const Text('Email result to candidate'),
+                        subtitle: Text(testResult.candidateEmail),
+                        value: sendEmail,
+                        onChanged: (value) {
+                          setState(() => sendEmail = value ?? false);
+                        },
+                        contentPadding: EdgeInsets.zero,
+                        dense: true,
+                      ),
+                    ],
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('Cancel'),
+                    ),
+                    ElevatedButton.icon(
+                      onPressed: () async {
+                        Navigator.pop(context);
+                        await _saveTestResult(testResult, sendEmail);
+                      },
+                      icon: const Icon(Icons.save),
+                      label: const Text('Save Test'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.green,
+                        foregroundColor: Colors.white,
+                      ),
+                    ),
+                  ],
+                ),
+          ),
+    );
+  }
+
+  Future<void> _saveTestResult(TestResult testResult, bool sendEmail) async {
+    try {
+      // Save to database
+      await DatabaseService.saveTestResult(testResult);
+
+      // Send email if requested
+      if (sendEmail) {
+        final emailSent = await EmailService.sendTestSummary(testResult);
+        if (!emailSent) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Test saved but email could not be sent'),
+                backgroundColor: Colors.orange,
+              ),
+            );
+          }
+          return;
+        }
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              sendEmail
+                  ? 'Test saved and email sent successfully!'
+                  : 'Test saved successfully!',
+            ),
+            backgroundColor: Colors.green,
+          ),
+        );
+
+        // Optionally navigate to past tests screen
+        // Navigator.pushReplacementNamed(context, '/past-tests');
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error saving test: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 

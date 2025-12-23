@@ -2,10 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'screens/image_selection_screen.dart';
+import 'screens/past_tests_screen.dart';
+import 'screens/dl25_form_screen.dart';
 import 'services/user_image_service.dart';
+import 'services/database_service.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Initialize Hive database
+  await DatabaseService.init();
+
   SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp])
       .then((_) {
     runApp(const MyApp());
@@ -24,6 +31,10 @@ class MyApp extends StatelessWidget {
         title: 'Driving Tutor',
         theme: ThemeData(primarySwatch: Colors.blue),
         home: const ImageSelectionScreen(),
+        routes: {
+          '/past-tests': (context) => const PastTestsScreen(),
+          '/dl25-form': (context) => const DL25FormScreen(),
+        },
       ),
     );
   }
