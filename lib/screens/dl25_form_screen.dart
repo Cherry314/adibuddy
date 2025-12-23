@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:intl/intl.dart';
-import 'dart:io' show Platform;
 import '../widgets/app_drawer.dart';
 
 /// DL25 Digital Test Report Form
@@ -16,9 +15,14 @@ class DL25FormScreen extends StatefulWidget {
 class _DL25FormScreenState extends State<DL25FormScreen> {
   final _formKey = GlobalKey<FormState>();
 
+  // Expansion state for sections
+  bool _candidateDetailsExpanded = false;
+  bool _drivingFaultsExpanded = true; // Start with this one open
+  bool _testResultExpanded = false;
+
   // Candidate Details
   final TextEditingController _candidateNameController = TextEditingController();
-  final TextEditingController _licenceNumberController = TextEditingController();
+  final TextEditingController _candidateEmailController = TextEditingController();
   final TextEditingController _testCenterController = TextEditingController();
   DateTime? _testDate;
   TimeOfDay? _testTime;
@@ -44,61 +48,99 @@ class _DL25FormScreenState extends State<DL25FormScreen> {
   bool _maneuverObservationSerious = false;
   bool _maneuverObservationDangerous = false;
 
-  // Vehicle Checks
-  String _vehicleChecksResult = 'Both Correct';
+  // Eyesight Test
+  bool _eyesightTestFailed = false;
 
-  // Examiner Details
-  final TextEditingController _examinerNameController = TextEditingController();
-  final TextEditingController _examinerNumberController = TextEditingController();
+  // Accompanied Status tickboxes
+  bool _accompaniedAS = false; // AS
+  bool _accompaniedNS1 = false; // NS (first)
+  bool _accompaniedNS2 = false; // NS (second)
+  bool _accompaniedHSDS = false; // HS/DS
 
-  // ETA (Eyesight Test)
-  String _eyesightTest = 'Pass';
+  // ETA (Extended Test Activities) checkboxes
+  bool _etaCompleted = false;
+  bool _etaPhysical = false;
+  bool _etaVerbal = false;
+
+  // ECO (Economy) checkboxes
+  bool _ecoCompleted = false;
+  bool _ecoControl = false;
+  bool _ecoPlanning = false;
+
+  // Additional checkboxes for database tracking
+  bool _eyesightTestCompleted = false;
+  bool _showMeTellMeCompleted = false;
+  bool _controlledStopCompleted = false;
 
   // Categories from DL25 form - organized in columns
   final List<List<String>> _faultCategoriesColumns = [
     [
       // Column 1
+      '###Show me / Tell me',
+      'Show me / Tell me',
+      '###Controlled stop',
+      'Controlled Stop',
+      '###Control',
+      'Accelerator',
+      'Clutch',
+      'Gears',
+      'Footbrake',
+      'Parking Brake',
+      'Steering',
+      '---LINE---',
       'Precautions',
-      'Control - Accelerator',
-      'Control - Clutch',
-      'Control - Gears',
-      'Control - Footbrake',
-      'Control - Park Brake',
-      'Control - Steering',
-      'Move off - Safety',
-      'Move off - Control',
-      'Use of mirrors - Change direction',
-      'Use of mirrors - Change speed',
-      'Signals - Necessary',
+      'Ancillary Controls',
     ],
     [
       // Column 2
-      'Signals - Correctly',
-      'Signals - Timed',
-      'Clearance/Obstructions',
-      'Response to signs/signals',
-      'Response to road markings',
-      'Use of speed',
-      'Following distance',
-      'Progress - Appropriate speed',
-      'Progress - Undue hesitation',
-      'Junctions - Observation',
-      'Junctions - Turning right',
-      'Junctions - Turning left',
+      '###Move Off',
+      'Safety',
+      'Control',
+      '###Use of mirrors',
+      'Signalling',
+      'Change direction',
+      'Change speed',
+      '###Signals',
+      'Necessary',
+      'Correctly',
+      'Timed',
+      '###Junctions',
+      'Approach Speed',
+      'Observation',
+      'Turning right',
+      'Turning left',
+      'Cutting corners',
+      '###Judgement',
+      'Overtaking',
+      'Meeting',
+      'Crossing',
     ],
     [
       // Column 3
-      'Junctions - Cutting corners',
-      'Judgement - Overtaking',
-      'Judgement - Meeting',
-      'Judgement - Crossing',
-      'Position - Normal driving',
-      'Position - Lane discipline',
+      '###Positioning',
+      'Normal driving',
+      'Lane discipline',
+      '---LINE---',
       'Pedestrian crossings',
-      'Position for turning right',
-      'Position for turning left',
+      '---LINE---',
+      'Position / Normal Stop',
+      '---LINE---',
       'Awareness/Planning',
-      'Ancillary Controls',
+      '---LINE---',
+      'Clearance',
+      '---LINE---',
+      'Following distance',
+      '---LINE---',
+      'Use of speed',
+      '###Progress',
+      'Appropriate speed',
+      'Undue hesitation',
+      '###Response to signs / signals',
+      'Traffic signs',
+      'Road markings',
+      'Traffic Lights',
+      'Traffic controllers',
+      'Other road users',
     ],
   ];
 
@@ -112,10 +154,8 @@ class _DL25FormScreenState extends State<DL25FormScreen> {
   @override
   void dispose() {
     _candidateNameController.dispose();
-    _licenceNumberController.dispose();
+    _candidateEmailController.dispose();
     _testCenterController.dispose();
-    _examinerNameController.dispose();
-    _examinerNumberController.dispose();
     super.dispose();
   }
 
@@ -238,10 +278,8 @@ class _DL25FormScreenState extends State<DL25FormScreen> {
                 onPressed: () {
                   setState(() {
                     _candidateNameController.clear();
-                    _licenceNumberController.clear();
+                    _candidateEmailController.clear();
                     _testCenterController.clear();
-                    _examinerNameController.clear();
-                    _examinerNumberController.clear();
                     _testDate = null;
                     _testTime = null;
                     _testResult = 'Pass';
@@ -255,8 +293,20 @@ class _DL25FormScreenState extends State<DL25FormScreen> {
                     _maneuverControlDangerous = false;
                     _maneuverObservationSerious = false;
                     _maneuverObservationDangerous = false;
-                    _vehicleChecksResult = 'Both Correct';
-                    _eyesightTest = 'Pass';
+                    _eyesightTestFailed = false;
+                    _accompaniedAS = false;
+                    _accompaniedNS1 = false;
+                    _accompaniedNS2 = false;
+                    _accompaniedHSDS = false;
+                    _etaCompleted = false;
+                    _etaPhysical = false;
+                    _etaVerbal = false;
+                    _ecoCompleted = false;
+                    _ecoControl = false;
+                    _ecoPlanning = false;
+                    _eyesightTestCompleted = false;
+                    _showMeTellMeCompleted = false;
+                    _controlledStopCompleted = false;
                   });
                   Navigator.pop(context);
                   ScaffoldMessenger.of(context).showSnackBar(
@@ -293,114 +343,75 @@ class _DL25FormScreenState extends State<DL25FormScreen> {
         ],
       ),
       drawer: const AppDrawer(currentRoute: '/dl25-form'),
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Colors.purple[50]!, Colors.white],
+      body: SafeArea(
+        child: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [Colors.purple[50]!, Colors.white],
+            ),
           ),
-        ),
-        child: Form(
-          key: _formKey,
-          child: ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              _buildHeader(),
-              const SizedBox(height: 24),
-
-              _buildSectionCard(
-                'Candidate Details',
-                Icons.person,
-                [
-                  _buildTextField(
-                      'Full Name', _candidateNameController, required: true),
-                  const SizedBox(height: 12),
-                  _buildTextField('Licence Number', _licenceNumberController,
-                      required: true),
-                  const SizedBox(height: 12),
-                  _buildTextField(
-                      'Test Centre', _testCenterController, required: true),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(child: _buildDateSelector()),
-                      const SizedBox(width: 12),
-                      Expanded(child: _buildTimeSelector()),
-                    ],
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 16),
-
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: _buildSectionCard(
-                      'Eyesight Test',
-                      Icons.visibility,
-                      [
-                        _buildRadioGroup(
-                          'Result',
-                          ['Pass', 'Fail'],
-                          _eyesightTest,
-                              (value) => setState(() => _eyesightTest = value!),
-                        ),
+          child: Form(
+            key: _formKey,
+            child: ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                _buildExpandableSection(
+                  title: 'Candidate Details',
+                  icon: Icons.person,
+                  isExpanded: _candidateDetailsExpanded,
+                  onExpansionChanged: (expanded) {
+                    setState(() => _candidateDetailsExpanded = expanded);
+                  },
+                  children: [
+                    _buildTextField(
+                        'Name', _candidateNameController, required: true),
+                    const SizedBox(height: 12),
+                    _buildEmailField(
+                        'Candidates Email', _candidateEmailController,
+                        required: true),
+                    const SizedBox(height: 12),
+                    _buildTextField(
+                        'Test Centre', _testCenterController, required: true),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(child: _buildDateSelector()),
+                        const SizedBox(width: 12),
+                        Expanded(child: _buildTimeSelector()),
                       ],
                     ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: _buildSectionCard(
-                      'Vehicle Safety',
-                      Icons.quiz,
-                      [
-                        _buildRadioGroup(
-                          'Result',
-                          ['Both Correct', '1 Fault', '2 Faults'],
-                          _vehicleChecksResult,
-                              (value) =>
-                              setState(() => _vehicleChecksResult = value!),
-                        ),
-                      ],
+                  ],
+                ),
+
+                const SizedBox(height: 12),
+
+                _buildExpandableFaultsSection(isTablet),
+
+                const SizedBox(height: 12),
+
+              _buildExpandableSection(
+                  title: 'Test Result',
+                  icon: Icons.assessment,
+                  isExpanded: _testResultExpanded,
+                  onExpansionChanged: (expanded) {
+                    setState(() => _testResultExpanded = expanded);
+                  },
+                  children: [
+                    _buildFaultsSummary(),
+                    const SizedBox(height: 16),
+                    const Divider(),
+                    const SizedBox(height: 16),
+                    _buildRadioGroup(
+                      'Result',
+                      ['Pass', 'Fail'],
+                      _testResult,
+                          (value) => setState(() => _testResult = value!),
                     ),
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 16),
-
-              _buildFaultsSection(isTablet),
-
-              const SizedBox(height: 16),
-
-              _buildSectionCard(
-                'Examiner Details',
-                Icons.badge,
-                [
-                  _buildTextField('Examiner Name', _examinerNameController),
-                  const SizedBox(height: 12),
-                  _buildTextField('Examiner Number', _examinerNumberController),
-                ],
-              ),
-
-              const SizedBox(height: 16),
-
-              _buildSectionCard(
-                'Test Result',
-                Icons.assessment,
-                [
-                  _buildRadioGroup(
-                    'Result',
-                    ['Pass', 'Fail'],
-                    _testResult,
-                        (value) => setState(() => _testResult = value!),
-                  ),
-                  const SizedBox(height: 16),
-                  _buildResultSummary(),
-                ],
+                    const SizedBox(height: 16),
+                    _buildResultSummary(),
+                  ],
               ),
 
               const SizedBox(height: 24),
@@ -438,6 +449,7 @@ class _DL25FormScreenState extends State<DL25FormScreen> {
             ],
           ),
         ),
+        ),
       ),
     );
   }
@@ -465,6 +477,111 @@ class _DL25FormScreenState extends State<DL25FormScreen> {
             const Text(
               'DL25 Form',
               style: TextStyle(fontSize: 16, color: Colors.white70),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildExpandableSection({
+    required String title,
+    required IconData icon,
+    required bool isExpanded,
+    required Function(bool) onExpansionChanged,
+    required List<Widget> children,
+  }) {
+    return Card(
+      elevation: 3,
+      margin: EdgeInsets.zero,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Theme(
+        data: Theme.of(context).copyWith(
+          dividerColor: Colors.transparent,
+        ),
+        child: ExpansionTile(
+          initiallyExpanded: isExpanded,
+          onExpansionChanged: onExpansionChanged,
+          iconColor: Colors.purple[700],
+          collapsedIconColor: Colors.purple[400],
+          backgroundColor: Colors.white,
+          collapsedBackgroundColor: Colors.white,
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12)),
+          collapsedShape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12)),
+          leading: Icon(icon, color: Colors.purple[600], size: 24),
+          title: Text(
+            title,
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: Colors.purple[700],
+            ),
+          ),
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: children,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildExpandableFaultsSection(bool isTablet) {
+    return Card(
+      elevation: 3,
+      margin: EdgeInsets.zero,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Theme(
+        data: Theme.of(context).copyWith(
+          dividerColor: Colors.transparent,
+        ),
+        child: ExpansionTile(
+          initiallyExpanded: _drivingFaultsExpanded,
+          onExpansionChanged: (expanded) {
+            setState(() => _drivingFaultsExpanded = expanded);
+          },
+          iconColor: Colors.purple[700],
+          collapsedIconColor: Colors.purple[400],
+          backgroundColor: Colors.white,
+          collapsedBackgroundColor: Colors.white,
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12)),
+          collapsedShape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12)),
+          leading: Icon(Icons.assignment, color: Colors.purple[600], size: 24),
+          title: Text(
+            'Driving Test Faults',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: Colors.purple[700],
+            ),
+          ),
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Tap to mark faults:',
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                  ),
+                  const Text(
+                    'D = Driving (1-3 taps) | S = Serious | X = Dangerous',
+                    style: TextStyle(fontSize: 12, color: Colors.grey),
+                  ),
+                  const SizedBox(height: 16),
+                  isTablet ? _buildTabletLayout() : _buildMobileLayout(),
+                ],
+              ),
             ),
           ],
         ),
@@ -528,11 +645,6 @@ class _DL25FormScreenState extends State<DL25FormScreen> {
             ),
             const SizedBox(height: 16),
 
-            _buildFaultsSummary(),
-
-            const SizedBox(height: 16),
-            const Divider(),
-            const SizedBox(height: 8),
             const Text(
               'Tap to mark faults:',
               style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
@@ -636,6 +748,10 @@ class _DL25FormScreenState extends State<DL25FormScreen> {
         Expanded(
           child: Column(
             children: [
+              _buildEyesightTestSection(),
+              const SizedBox(height: 8),
+              _buildAccompaniedStatusSection(),
+              const SizedBox(height: 8),
               _buildManeuverSection(),
               const SizedBox(height: 8),
               ..._faultCategoriesColumns[0].map((category) =>
@@ -646,15 +762,23 @@ class _DL25FormScreenState extends State<DL25FormScreen> {
         const SizedBox(width: 8),
         Expanded(
           child: Column(
-            children: _faultCategoriesColumns[1].map((category) =>
-                _buildFaultRow(category)).toList(),
+            children: [
+              ..._faultCategoriesColumns[1].map((category) =>
+                  _buildFaultRow(category)).toList(),
+              const SizedBox(height: 8),
+              _buildETASection(),
+            ],
           ),
         ),
         const SizedBox(width: 8),
         Expanded(
           child: Column(
-            children: _faultCategoriesColumns[2].map((category) =>
-                _buildFaultRow(category)).toList(),
+            children: [
+              ..._faultCategoriesColumns[2].map((category) =>
+                  _buildFaultRow(category)).toList(),
+              const SizedBox(height: 8),
+              _buildECOSection(),
+            ],
           ),
         ),
       ],
@@ -669,6 +793,223 @@ class _DL25FormScreenState extends State<DL25FormScreen> {
         ..._faultCategoriesColumns.expand((column) => column).map((category) =>
             _buildFaultRow(category)).toList(),
       ],
+    );
+  }
+
+  Widget _buildEyesightTestSection() {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.blue[50],
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.blue[300]!, width: 2),
+      ),
+      child: Row(
+        children: [
+          Checkbox(
+            value: _eyesightTestCompleted,
+            onChanged: (val) =>
+                setState(() => _eyesightTestCompleted = val ?? false),
+            activeColor: Colors.blue[600],
+            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            visualDensity: VisualDensity.compact,
+          ),
+          const SizedBox(width: 4),
+          Text(
+            'EYESIGHT TEST',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+              color: Colors.blue[900],
+            ),
+          ),
+          const Spacer(),
+          _AnimatedToggleButton(
+            isActive: _eyesightTestFailed,
+            onTap: () =>
+                setState(() => _eyesightTestFailed = !_eyesightTestFailed),
+            label: 'S',
+            activeColor: Colors.orange[700]!,
+            activeBgColor: Colors.orange[100],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAccompaniedStatusSection() {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.grey[100],
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.grey[400]!, width: 2),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        children: [
+          Expanded(
+            child: _buildCheckboxItem('AS', _accompaniedAS, (value) {
+              setState(() => _accompaniedAS = value);
+            }),
+          ),
+          Expanded(
+            child: _buildCheckboxItem('NS', _accompaniedNS1, (value) {
+              setState(() => _accompaniedNS1 = value);
+            }),
+          ),
+          Expanded(
+            child: _buildCheckboxItem('NS', _accompaniedNS2, (value) {
+              setState(() => _accompaniedNS2 = value);
+            }),
+          ),
+          Expanded(
+            child: _buildCheckboxItem('HS/DS', _accompaniedHSDS, (value) {
+              setState(() => _accompaniedHSDS = value);
+            }),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCheckboxItem(String label, bool value,
+      Function(bool) onChanged) {
+    return InkWell(
+      onTap: () => onChanged(!value),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Checkbox(
+            value: value,
+            onChanged: (val) => onChanged(val ?? false),
+            activeColor: Colors.purple[600],
+            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            visualDensity: VisualDensity.compact,
+          ),
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildETASection() {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.green[50],
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.green[300]!, width: 2),
+      ),
+      child: Row(
+        children: [
+          // Main ETA checkbox
+          Checkbox(
+            value: _etaCompleted,
+            onChanged: (val) => setState(() => _etaCompleted = val ?? false),
+            activeColor: Colors.green[600],
+            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            visualDensity: VisualDensity.compact,
+          ),
+          Text(
+            'ETA',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.bold,
+              color: Colors.green[900],
+            ),
+          ),
+          const SizedBox(width: 16),
+          // Physical checkbox
+          Text(
+            'Physical',
+            style: TextStyle(fontSize: 11, color: Colors.grey[700]),
+          ),
+          Checkbox(
+            value: _etaPhysical,
+            onChanged: (val) => setState(() => _etaPhysical = val ?? false),
+            activeColor: Colors.green[600],
+            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            visualDensity: VisualDensity.compact,
+          ),
+          const SizedBox(width: 8),
+          // Verbal checkbox
+          Text(
+            'Verbal',
+            style: TextStyle(fontSize: 11, color: Colors.grey[700]),
+          ),
+          Checkbox(
+            value: _etaVerbal,
+            onChanged: (val) => setState(() => _etaVerbal = val ?? false),
+            activeColor: Colors.green[600],
+            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            visualDensity: VisualDensity.compact,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildECOSection() {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.teal[50],
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.teal[300]!, width: 2),
+      ),
+      child: Row(
+        children: [
+          // Main ECO checkbox
+          Checkbox(
+            value: _ecoCompleted,
+            onChanged: (val) => setState(() => _ecoCompleted = val ?? false),
+            activeColor: Colors.teal[600],
+            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            visualDensity: VisualDensity.compact,
+          ),
+          Text(
+            'ECO',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.bold,
+              color: Colors.teal[900],
+            ),
+          ),
+          const SizedBox(width: 16),
+          // Control checkbox
+          Text(
+            'Control',
+            style: TextStyle(fontSize: 11, color: Colors.grey[700]),
+          ),
+          Checkbox(
+            value: _ecoControl,
+            onChanged: (val) => setState(() => _ecoControl = val ?? false),
+            activeColor: Colors.teal[600],
+            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            visualDensity: VisualDensity.compact,
+          ),
+          const SizedBox(width: 8),
+          // Planning checkbox
+          Text(
+            'Planning',
+            style: TextStyle(fontSize: 11, color: Colors.grey[700]),
+          ),
+          Checkbox(
+            value: _ecoPlanning,
+            onChanged: (val) => setState(() => _ecoPlanning = val ?? false),
+            activeColor: Colors.teal[600],
+            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            visualDensity: VisualDensity.compact,
+          ),
+        ],
+      ),
     );
   }
 
@@ -861,6 +1202,35 @@ class _DL25FormScreenState extends State<DL25FormScreen> {
     );
   }
 
+  Widget _buildEmailField(String label,
+      TextEditingController controller, {
+        bool required = false,
+      }) {
+    return TextFormField(
+      controller: controller,
+      keyboardType: TextInputType.emailAddress,
+      decoration: InputDecoration(
+        labelText: label,
+        border: const OutlineInputBorder(),
+        filled: true,
+        fillColor: Colors.white,
+        prefixIcon: const Icon(Icons.email),
+      ),
+      validator: required
+          ? (value) {
+        if (value?.isEmpty ?? true) {
+          return 'This field is required';
+        }
+        // Basic email validation
+        if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(value!)) {
+          return 'Please enter a valid email';
+        }
+        return null;
+      }
+          : null,
+    );
+  }
+
   Widget _buildDateSelector() {
     return InkWell(
       onTap: _selectDate,
@@ -946,6 +1316,61 @@ class _DL25FormScreenState extends State<DL25FormScreen> {
   }
 
   Widget _buildFaultRow(String category) {
+    // Check if this is a subheading
+    if (category.startsWith('###')) {
+      final headingText = category.replaceFirst('###', '');
+
+      // Check if this heading needs a checkbox
+      bool? checkboxValue;
+      Function(bool)? onCheckboxChanged;
+
+      if (headingText == 'Show me / Tell me') {
+        checkboxValue = _showMeTellMeCompleted;
+        onCheckboxChanged =
+            (val) => setState(() => _showMeTellMeCompleted = val);
+      } else if (headingText == 'Controlled stop') {
+        checkboxValue = _controlledStopCompleted;
+        onCheckboxChanged =
+            (val) => setState(() => _controlledStopCompleted = val);
+      }
+
+      return Container(
+        margin: const EdgeInsets.only(top: 8, bottom: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        child: Row(
+          children: [
+            if (checkboxValue != null && onCheckboxChanged != null) ...[
+              Checkbox(
+                value: checkboxValue,
+                onChanged: (val) => onCheckboxChanged?.call(val ?? false),
+                activeColor: Colors.purple[600],
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                visualDensity: VisualDensity.compact,
+              ),
+              const SizedBox(width: 4),
+            ],
+            Text(
+              headingText,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.bold,
+                color: Colors.purple[700],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Check if this is a divider line
+    if (category == '---LINE---') {
+      return Container(
+        margin: const EdgeInsets.symmetric(vertical: 4),
+        height: 1,
+        color: Colors.grey[300],
+      );
+    }
+
     final drivingCount = _drivingFaults[category] ?? 0;
     final hasSerious = _seriousFaults.contains(category);
     final hasDangerous = _dangerousFaults.contains(category);
@@ -998,7 +1423,7 @@ class _DL25FormScreenState extends State<DL25FormScreen> {
     final bool hasFailed = totalDrivingFaults > 15 ||
         totalSeriousFaults > 0 ||
         totalDangerousFaults > 0 ||
-        _eyesightTest == 'Fail';
+        _eyesightTestFailed;
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -1039,7 +1464,8 @@ class _DL25FormScreenState extends State<DL25FormScreen> {
               Text('• $totalSeriousFaults serious fault(s)'),
             if (totalDangerousFaults > 0)
               Text('• $totalDangerousFaults dangerous fault(s)'),
-            if (_eyesightTest == 'Fail') const Text('• Failed eyesight test'),
+            if (_eyesightTestFailed)
+              const Text('• Failed eyesight test'),
           ],
         ],
       ),
