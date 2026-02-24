@@ -83,7 +83,7 @@ class EmailService {
 
     // Detailed faults
     if (test.drivingFaults.isNotEmpty) {
-      body.writeln('DRIVING FAULTS (D)');
+      body.writeln('DRIVING FAULTS (F)');
       body.writeln('─────────────────────────────────────');
       test.drivingFaults.forEach((category, count) {
         if (count > 0) {
@@ -103,7 +103,7 @@ class EmailService {
     }
 
     if (test.dangerousFaults.isNotEmpty) {
-      body.writeln('DANGEROUS FAULTS (X)');
+      body.writeln('DANGEROUS FAULTS (D)');
       body.writeln('─────────────────────────────────────');
       for (var fault in test.dangerousFaults) {
         body.writeln('• $fault');

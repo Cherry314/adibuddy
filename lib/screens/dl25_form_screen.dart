@@ -6,6 +6,7 @@ import '../widgets/app_drawer.dart';
 import '../models/test_result.dart';
 import '../services/database_service.dart';
 import '../services/email_service.dart';
+import '../services/pdf_service.dart';
 
 /// DL25 Digital Test Report Form
 /// Programmatic recreation of the DVSA DL25 driving test report
@@ -20,16 +21,16 @@ class _DL25FormScreenState extends State<DL25FormScreen> {
   final _formKey = GlobalKey<FormState>();
 
   // Expansion state for sections
-  bool _candidateDetailsExpanded = false;
-  bool _drivingFaultsExpanded = true; // Start with this one open
+  bool _candidateDetailsExpanded = true;  // Start with this one open
+  bool _drivingFaultsExpanded = false;    // Start collapsed
   bool _testResultExpanded = false;
 
   // Candidate Details
   final TextEditingController _candidateNameController = TextEditingController();
   final TextEditingController _candidateEmailController = TextEditingController();
   final TextEditingController _testCenterController = TextEditingController();
-  DateTime? _testDate;
-  TimeOfDay? _testTime;
+  DateTime _testDate = DateTime.now();
+  TimeOfDay _testTime = TimeOfDay.now();
 
   // Test Result
   String _testResult = 'Pass';
@@ -255,19 +256,18 @@ class _DL25FormScreenState extends State<DL25FormScreen> {
   }
 
   Future<void> _saveForm() async {
+    print('Save form called');
     if (!_formKey.currentState!.validate()) {
-      return;
-    }
-
-    if (_testDate == null || _testTime == null) {
+      print('Form validation failed');
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Please select test date and time'),
-          backgroundColor: Colors.red,
+          content: Text('Please fill in all required fields'),
+          backgroundColor: Colors.orange,
         ),
       );
       return;
     }
+    print('Form validation passed');
 
     // Calculate if passed
     final bool passed = totalDrivingFaults <= 15 &&
@@ -281,8 +281,8 @@ class _DL25FormScreenState extends State<DL25FormScreen> {
       candidateName: _candidateNameController.text,
       candidateEmail: _candidateEmailController.text,
       testCenter: _testCenterController.text,
-      testDate: _testDate!,
-      testTime: '${_testTime!.hour.toString().padLeft(2, '0')}:${_testTime!
+      testDate: _testDate,
+      testTime: '${_testTime.hour.toString().padLeft(2, '0')}:${_testTime
           .minute.toString().padLeft(2, '0')}',
       passed: passed,
       drivingFaults: Map<String, int>.from(_drivingFaults),
@@ -354,7 +354,7 @@ class _DL25FormScreenState extends State<DL25FormScreen> {
                       const Divider(),
                       const SizedBox(height: 8),
                       CheckboxListTile(
-                        title: const Text('Email result to candidate'),
+                        title: const Text('Send result to Candidate'),
                         subtitle: Text(testResult.candidateEmail),
                         value: sendEmail,
                         onChanged: (value) {
@@ -379,6 +379,18 @@ class _DL25FormScreenState extends State<DL25FormScreen> {
                       label: const Text('Save Test'),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.green,
+                        foregroundColor: Colors.white,
+                      ),
+                    ),
+                    ElevatedButton.icon(
+                      onPressed: () async {
+                        Navigator.pop(context);
+                        await _sharePdfReport(testResult);
+                      },
+                      icon: const Icon(Icons.share),
+                      label: const Text('Share PDF'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blue,
                         foregroundColor: Colors.white,
                       ),
                     ),
@@ -436,6 +448,40 @@ class _DL25FormScreenState extends State<DL25FormScreen> {
     }
   }
 
+  Future<void> _sharePdfReport(TestResult testResult) async {
+    try {
+      // Show loading indicator
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+
+      await PdfService.generateAndSharePdf(testResult);
+
+      // Dismiss loading indicator
+      if (mounted && Navigator.canPop(context)) {
+        Navigator.pop(context);
+      }
+    } catch (e) {
+      // Dismiss loading indicator
+      if (mounted && Navigator.canPop(context)) {
+        Navigator.pop(context);
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error generating PDF: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
   void _clearForm() {
     showDialog(
       context: context,
@@ -455,8 +501,8 @@ class _DL25FormScreenState extends State<DL25FormScreen> {
                     _candidateNameController.clear();
                     _candidateEmailController.clear();
                     _testCenterController.clear();
-                    _testDate = null;
-                    _testTime = null;
+                    _testDate = DateTime.now();
+                    _testTime = TimeOfDay.now();
                     _testResult = 'Pass';
                     _drivingFaults.clear();
                     _seriousFaults.clear();
@@ -545,10 +591,10 @@ class _DL25FormScreenState extends State<DL25FormScreen> {
                     const SizedBox(height: 12),
                     _buildEmailField(
                         'Candidates Email', _candidateEmailController,
-                        required: true),
+                        required: false),
                     const SizedBox(height: 12),
                     _buildTextField(
-                        'Test Centre', _testCenterController, required: true),
+                        'Test Centre', _testCenterController, required: false),
                     const SizedBox(height: 12),
                     Row(
                       children: [
@@ -702,7 +748,7 @@ class _DL25FormScreenState extends State<DL25FormScreen> {
               borderRadius: BorderRadius.circular(12)),
           leading: Icon(Icons.assignment, color: Colors.purple[600], size: 24),
           title: Text(
-            'Driving Test Faults',
+            'Driving Test Report',
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.bold,
@@ -720,7 +766,7 @@ class _DL25FormScreenState extends State<DL25FormScreen> {
                     style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
                   ),
                   const Text(
-                    'D = Driving (1-3 taps) | S = Serious | X = Dangerous',
+                    'F = Faults (1-3 taps) | S = Serious | D = Dangerous',
                     style: TextStyle(fontSize: 12, color: Colors.grey),
                   ),
                   const SizedBox(height: 16),
@@ -1250,7 +1296,7 @@ class _DL25FormScreenState extends State<DL25FormScreen> {
             _AnimatedToggleButton(
               isActive: hasDangerous,
               onTap: onDangerousTap,
-              label: 'X',
+              label: 'D',
               activeColor: Colors.red[700]!,
               activeBgColor: Colors.red[100],
             ),
@@ -1321,12 +1367,8 @@ class _DL25FormScreenState extends State<DL25FormScreen> {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(
-              _testDate != null
-                  ? DateFormat('dd/MM/yyyy').format(_testDate!)
-                  : 'Select Date',
-              style: TextStyle(
-                color: _testDate != null ? Colors.black : Colors.grey,
-              ),
+              DateFormat('dd/MM/yyyy').format(_testDate),
+              style: const TextStyle(color: Colors.black),
             ),
             const Icon(Icons.calendar_today, size: 20),
           ],
@@ -1349,10 +1391,8 @@ class _DL25FormScreenState extends State<DL25FormScreen> {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(
-              _testTime != null ? _testTime!.format(context) : 'Select Time',
-              style: TextStyle(
-                color: _testTime != null ? Colors.black : Colors.grey,
-              ),
+              _testTime.format(context),
+              style: const TextStyle(color: Colors.black),
             ),
             const Icon(Icons.access_time, size: 20),
           ],
@@ -1428,7 +1468,7 @@ class _DL25FormScreenState extends State<DL25FormScreen> {
             Text(
               headingText,
               style: TextStyle(
-                fontSize: 13,
+                fontSize: 15,
                 fontWeight: FontWeight.bold,
                 color: Colors.purple[700],
               ),
@@ -1463,7 +1503,7 @@ class _DL25FormScreenState extends State<DL25FormScreen> {
         contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
         title: Text(
           category,
-          style: const TextStyle(fontSize: 12),
+          style: const TextStyle(fontSize: 14),
         ),
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
@@ -1485,7 +1525,7 @@ class _DL25FormScreenState extends State<DL25FormScreen> {
             _AnimatedToggleButton(
               isActive: hasDangerous,
               onTap: () => _toggleDangerousFault(category),
-              label: 'X',
+              label: 'D',
               activeColor: Colors.red[700]!,
               activeBgColor: Colors.red[100],
             ),
@@ -1634,7 +1674,7 @@ class _AnimatedFaultButtonState extends State<_AnimatedFaultButton>
             ),
             child: Center(
               child: Text(
-                widget.count > 0 ? widget.count.toString() : 'D',
+                widget.count > 0 ? widget.count.toString() : 'F',
                 style: TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 11,
