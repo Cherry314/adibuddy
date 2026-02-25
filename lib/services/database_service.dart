@@ -1,5 +1,6 @@
 import 'package:hive_flutter/hive_flutter.dart';
 import '../models/test_result.dart';
+import '../models/speed_limit_zone.dart';
 
 class DatabaseService {
   static const String _testResultsBox = 'test_results';
@@ -7,6 +8,7 @@ class DatabaseService {
   static Future<void> init() async {
     await Hive.initFlutter();
     Hive.registerAdapter(TestResultAdapter());
+    Hive.registerAdapter(SpeedLimitZoneAdapter());
     await Hive.openBox<TestResult>(_testResultsBox);
   }
 
