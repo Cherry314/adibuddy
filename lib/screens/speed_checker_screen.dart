@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../widgets/app_drawer.dart';
 import '../services/speed_limit_service.dart';
 import '../services/speed_limit_cache_service.dart';
@@ -35,6 +36,10 @@ class _SpeedCheckerScreenState extends State<SpeedCheckerScreen> {
   // Manual speed limit selection
   bool _isManualSpeedLimit = false;
 
+  // Speed calibration
+  double _speedCalibrationOffset = 0.0;
+  double _speedCalibrationMultiplier = 1.0;
+
   // Warning flash animation
   bool _showWarningFlash = false;
   Timer? _warningFlashTimer;
@@ -57,6 +62,9 @@ class _SpeedCheckerScreenState extends State<SpeedCheckerScreen> {
   Future<void> _startTracking() async {
     bool serviceEnabled;
     LocationPermission permission;
+
+    // Load speed calibration data first
+    await _loadCalibrationData();
 
     // Check if location services are enabled
     serviceEnabled = await Geolocator.isLocationServiceEnabled();
@@ -121,15 +129,17 @@ class _SpeedCheckerScreenState extends State<SpeedCheckerScreen> {
         setState(() {
           _currentSpeedMps = position.speed; // Speed in m/s
           // Convert to MPH: 1 m/s = 2.23694 mph
-          _currentSpeedMph = _currentSpeedMps * 2.23694;
+          final rawSpeedMph = _currentSpeedMps * 2.23694;
+          // Apply calibration: Corrected = (GPS - offset) / multiplier
+          _currentSpeedMph = (rawSpeedMph - _speedCalibrationOffset) / _speedCalibrationMultiplier;
           _currentSpeedRounded = _currentSpeedMph.round();
-          
+
           // Update statistics (only count when moving)
           if (_currentSpeedMph > 0.5) {
             _speedReadings++;
             _totalSpeedMph += _currentSpeedMph;
             _averageSpeedMph = _totalSpeedMph / _speedReadings;
-            
+
             if (_currentSpeedRounded > _maxSpeedMph) {
               _maxSpeedMph = _currentSpeedRounded;
             }
@@ -227,6 +237,21 @@ class _SpeedCheckerScreenState extends State<SpeedCheckerScreen> {
         }
       }
     });
+  }
+
+  /// Load speed calibration data from SharedPreferences
+  Future<void> _loadCalibrationData() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      setState(() {
+        _speedCalibrationOffset = prefs.getDouble('speed_calibration_offset') ?? 0.0;
+        _speedCalibrationMultiplier = prefs.getDouble('speed_calibration_multiplier') ?? 1.0;
+      });
+    } catch (e) {
+      // If loading fails, use default values (no calibration)
+      _speedCalibrationOffset = 0.0;
+      _speedCalibrationMultiplier = 1.0;
+    }
   }
 
   void _stopTracking() {

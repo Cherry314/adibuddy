@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../screens/image_selection_screen.dart';
 import '../screens/speed_checker_screen.dart';
+import '../screens/calibrate_driving_monitor_screen.dart';
+import '../screens/speed_calibration_screen.dart';
 import '../screens/user_image_control_screen.dart';
 import '../screens/dl25_form_screen.dart';
 import '../screens/settings_screen.dart';
@@ -71,7 +73,7 @@ class AppDrawer extends StatelessWidget {
             _buildDrawerItem(
               context,
               icon: Icons.speed,
-              title: 'Speed Checker',
+              title: 'Driving Monitor',
               route: '/speed-checker',
               isSelected: currentRoute == '/speed-checker',
               onTap: () {
@@ -124,7 +126,37 @@ class AppDrawer extends StatelessWidget {
               },
             ),
 
-            const Divider(thickness: 1, color: Colors.purple), // Use const for better performance
+            const Divider(thickness: 1, color: Colors.purple),
+
+            // Calibrate Driving Monitor - Just above Settings, below the line
+            _buildDrawerItem(
+              context,
+              icon: Icons.tune,
+              title: 'Calibrate Driving Monitor',
+              route: '/calibrate-driving-monitor',
+              isSelected: currentRoute == '/calibrate-driving-monitor',
+              onTap: () {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(builder: (_) => const CalibrateDrivingMonitorScreen()),
+                );
+              },
+            ),
+
+            // Speed Calibration - Sub-item below Calibrate Driving Monitor
+            _buildDrawerItem(
+              context,
+              icon: Icons.speed,
+              title: '  Calibrate Speed',
+              route: '/speed-calibration',
+              isSelected: currentRoute == '/speed-calibration',
+              onTap: () {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(builder: (_) => const SpeedCalibrationScreen()),
+                );
+              },
+            ),
 
             _buildDrawerItem(
               context,
