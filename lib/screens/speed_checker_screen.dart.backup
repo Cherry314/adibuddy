@@ -1,8 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:sensors_plus/sensors_plus.dart';
 import '../widgets/app_drawer.dart';
 import '../services/speed_limit_service.dart';
 import '../services/speed_limit_cache_service.dart';
@@ -37,22 +35,6 @@ class _SpeedCheckerScreenState extends State<SpeedCheckerScreen> {
   // Manual speed limit selection
   bool _isManualSpeedLimit = false;
 
-  // Speed calibration
-  double _speedCalibrationOffset = 0.0;
-  double _speedCalibrationMultiplier = 1.0;
-
-  // Accelerometer for G-force detection
-  StreamSubscription<AccelerometerEvent>? _accelerometerSubscription;
-  double _gForceLeft = 0.0;
-  double _gForceRight = 0.0;
-  double _gForceForward = 0.0;
-  double _gForceBackward = 0.0;
-
-  // G-force thresholds (in Gs)
-  static const double _mildThreshold = 0.15;
-  static const double _moderateThreshold = 0.3;
-  static const double _severeThreshold = 0.5;
-
   // Warning flash animation
   bool _showWarningFlash = false;
   Timer? _warningFlashTimer;
@@ -75,9 +57,6 @@ class _SpeedCheckerScreenState extends State<SpeedCheckerScreen> {
   Future<void> _startTracking() async {
     bool serviceEnabled;
     LocationPermission permission;
-
-    // Load speed calibration data first
-    await _loadCalibrationData();
 
     // Check if location services are enabled
     serviceEnabled = await Geolocator.isLocationServiceEnabled();
@@ -142,17 +121,15 @@ class _SpeedCheckerScreenState extends State<SpeedCheckerScreen> {
         setState(() {
           _currentSpeedMps = position.speed; // Speed in m/s
           // Convert to MPH: 1 m/s = 2.23694 mph
-          final rawSpeedMph = _currentSpeedMps * 2.23694;
-          // Apply calibration: Corrected = (GPS - offset) / multiplier
-          _currentSpeedMph = (rawSpeedMph - _speedCalibrationOffset) / _speedCalibrationMultiplier;
+          _currentSpeedMph = _currentSpeedMps * 2.23694;
           _currentSpeedRounded = _currentSpeedMph.round();
-
+          
           // Update statistics (only count when moving)
           if (_currentSpeedMph > 0.5) {
             _speedReadings++;
             _totalSpeedMph += _currentSpeedMph;
             _averageSpeedMph = _totalSpeedMph / _speedReadings;
-
+            
             if (_currentSpeedRounded > _maxSpeedMph) {
               _maxSpeedMph = _currentSpeedRounded;
             }
@@ -168,37 +145,6 @@ class _SpeedCheckerScreenState extends State<SpeedCheckerScreen> {
           _statusColor = Colors.red;
           _isTracking = false;
         });
-      },
-    );
-
-    // Start accelerometer for G-force detection
-    _startAccelerometer();
-  }
-
-  void _startAccelerometer() {
-    _accelerometerSubscription?.cancel();
-    _accelerometerSubscription = accelerometerEventStream().listen(
-      (AccelerometerEvent event) {
-        // Phone is vertical and facing driver/passenger
-        // X: left/right (positive = left, negative = right)
-        // Y: forward/backward (positive = forward, negative = backward)
-        const double g = 9.81;
-        
-        // Left/Right G-force (X axis)
-        final lateralG = event.x / g;
-        
-        // Forward/Backward G-force (Y axis)
-        final longitudinalG = event.y / g;
-        
-        setState(() {
-          _gForceLeft = lateralG > 0 ? lateralG.abs() : 0;
-          _gForceRight = lateralG < 0 ? lateralG.abs() : 0;
-          _gForceForward = longitudinalG > 0 ? longitudinalG.abs() : 0;
-          _gForceBackward = longitudinalG < 0 ? longitudinalG.abs() : 0;
-        });
-      },
-      onError: (error) {
-        debugPrint('Accelerometer error: $error');
       },
     );
   }
@@ -283,26 +229,10 @@ class _SpeedCheckerScreenState extends State<SpeedCheckerScreen> {
     });
   }
 
-  /// Load speed calibration data from SharedPreferences
-  Future<void> _loadCalibrationData() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      setState(() {
-        _speedCalibrationOffset = prefs.getDouble('speed_calibration_offset') ?? 0.0;
-        _speedCalibrationMultiplier = prefs.getDouble('speed_calibration_multiplier') ?? 1.0;
-      });
-    } catch (e) {
-      // If loading fails, use default values (no calibration)
-      _speedCalibrationOffset = 0.0;
-      _speedCalibrationMultiplier = 1.0;
-    }
-  }
-
   void _stopTracking() {
     _positionStreamSubscription?.cancel();
     _speedLimitTimer?.cancel();
     _warningFlashTimer?.cancel();
-    _accelerometerSubscription?.cancel();
     
     setState(() {
       _isTracking = false;
@@ -316,10 +246,6 @@ class _SpeedCheckerScreenState extends State<SpeedCheckerScreen> {
       _warningLevel = 0;
       _showWarningFlash = false;
       _isManualSpeedLimit = false;
-      _gForceLeft = 0.0;
-      _gForceRight = 0.0;
-      _gForceForward = 0.0;
-      _gForceBackward = 0.0;
     });
   }
 
@@ -443,7 +369,6 @@ class _SpeedCheckerScreenState extends State<SpeedCheckerScreen> {
     _positionStreamSubscription?.cancel();
     _speedLimitTimer?.cancel();
     _warningFlashTimer?.cancel();
-    _accelerometerSubscription?.cancel();
     super.dispose();
   }
 
@@ -511,138 +436,87 @@ class _SpeedCheckerScreenState extends State<SpeedCheckerScreen> {
                   ),
                 ),
                 const SizedBox(height: 10),
-
-                // Main Speed Display with G-Force Arc Brackets
-                SizedBox(
-                  width: 280,
-                  height: 280,
-                  child: Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      // Main Speed Circle (drawn first, at bottom)
-                      AnimatedContainer(
-                        duration: const Duration(milliseconds: 200),
-                        width: 240,
-                        height: 240,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          gradient: LinearGradient(
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                            colors: [
-                              _showWarningFlash
-                                  ? (_warningLevel == 2 ? Colors.red[100]! : Colors.orange[100]!)
-                                  : Colors.white,
-                              _showWarningFlash
-                                  ? (_warningLevel == 2 ? Colors.red[200]! : Colors.orange[200]!)
-                                  : Colors.grey[100]!,
-                            ],
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: _displayColor.withOpacity(0.3),
-                              blurRadius: 30,
-                              spreadRadius: 5,
-                            ),
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.1),
-                              blurRadius: 20,
-                              offset: const Offset(0, 10),
-                            ),
-                          ],
-                          border: _warningLevel > 0
-                              ? Border.all(
-                                  color: _displayColor.withOpacity(0.5),
-                                  width: 4,
-                                )
-                              : null,
-                        ),
-                        child: Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              // Warning icon for severe warning
-                              if (_warningLevel == 2 && !_showWarningFlash)
-                                Icon(
-                                  Icons.warning_amber_rounded,
-                                  color: Colors.red,
-                                  size: 28,
-                                ),
-                              if (_warningLevel == 2 && !_showWarningFlash)
-                                const SizedBox(height: 6),
-
-                              // Speed value
-                              Text(
-                                _currentSpeedRounded.toString(),
-                                style: TextStyle(
-                                  fontSize: 80,
-                                  fontWeight: FontWeight.bold,
-                                  color: _displayColor,
-                                  height: 1,
-                                ),
-                              ),
-                              // Unit label
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: _displayColor.withOpacity(0.1),
-                                  borderRadius: BorderRadius.circular(16),
-                                ),
-                                child: Text(
-                                  'MPH',
-                                  style: TextStyle(
-                                    fontSize: 20,
-                                    fontWeight: FontWeight.bold,
-                                    color: _displayColor,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
+                
+                // Main Speed Display with Warning
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  width: 240,
+                  height: 240,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        _showWarningFlash
+                            ? (_warningLevel == 2 ? Colors.red[100]! : Colors.orange[100]!)
+                            : Colors.white,
+                        _showWarningFlash
+                            ? (_warningLevel == 2 ? Colors.red[200]! : Colors.orange[200]!)
+                            : Colors.grey[100]!,
+                      ],
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: _displayColor.withOpacity(0.3),
+                        blurRadius: 30,
+                        spreadRadius: 5,
                       ),
-                      // Arcs drawn ON TOP of circle (after circle in Stack)
-                      // Left arc bracket (for right turn G-force)
-                      Positioned(
-                        left: 5,
-                        top: 60,
-                        bottom: 60,
-                        child: _buildGForceArc(
-                          gForce: _gForceRight,
-                          position: ArcPosition.left,
-                        ),
-                      ),
-                      // Right arc bracket (for left turn G-force)
-                      Positioned(
-                        right: 5,
-                        top: 60,
-                        bottom: 60,
-                        child: _buildGForceArc(
-                          gForce: _gForceLeft,
-                          position: ArcPosition.right,
-                        ),
-                      ),
-                      // Top arc bracket (for deceleration/braking)
-                      Positioned(
-                        top: 5,
-                        left: 60,
-                        right: 60,
-                        child: _buildGForceArc(
-                          gForce: _gForceBackward,
-                          position: ArcPosition.top,
-                        ),
-                      ),
-                      // Bottom arc bracket (for acceleration)
-                      Positioned(
-                        bottom: 5,
-                        left: 60,
-                        right: 60,
-                        child: _buildGForceArc(
-                          gForce: _gForceForward,
-                          position: ArcPosition.bottom,
-                        ),
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.1),
+                        blurRadius: 20,
+                        offset: const Offset(0, 10),
                       ),
                     ],
+                    border: _warningLevel > 0
+                        ? Border.all(
+                            color: _displayColor.withOpacity(0.5),
+                            width: 4,
+                          )
+                        : null,
+                  ),
+                  child: Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        // Warning icon for severe warning
+                        if (_warningLevel == 2 && !_showWarningFlash)
+                          Icon(
+                            Icons.warning_amber_rounded,
+                            color: Colors.red,
+                            size: 28,
+                          ),
+                        if (_warningLevel == 2 && !_showWarningFlash)
+                          const SizedBox(height: 6),
+                        
+                        // Speed value
+                        Text(
+                          _currentSpeedRounded.toString(),
+                          style: TextStyle(
+                            fontSize: 80,
+                            fontWeight: FontWeight.bold,
+                            color: _displayColor,
+                            height: 1,
+                          ),
+                        ),
+                        // Unit label
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: _displayColor.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: Text(
+                            'MPH',
+                            style: TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                              color: _displayColor,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
                 const SizedBox(height: 8),
@@ -873,134 +747,4 @@ class _SpeedCheckerScreenState extends State<SpeedCheckerScreen> {
       ),
     );
   }
-
-  /// Build a G-force arc indicator with color-coded thresholds
-  Widget _buildGForceArc({
-    required double gForce,
-    required ArcPosition position,
-  }) {
-    // Determine color based on G-force magnitude
-    Color arcColor;
-    double opacity;
-    double strokeWidth;
-    
-    if (gForce >= _severeThreshold) {
-      arcColor = Colors.red;
-      opacity = 0.9;
-      strokeWidth = 5;
-    } else if (gForce >= _moderateThreshold) {
-      arcColor = Colors.orange;
-      opacity = 0.8;
-      strokeWidth = 5;
-    } else if (gForce >= _mildThreshold) {
-      arcColor = Colors.white;
-      opacity = 0.7;
-      strokeWidth = 5;
-    } else {
-      // No movement detected - show green
-      arcColor = Colors.green;
-      opacity = 0.5;
-      strokeWidth = 5;
-    }
-
-    // Calculate size based on G-force intensity
-    final double sizeMultiplier = 1.0 + (gForce * 0.3).clamp(0.0, 0.3);
-
-    double width;
-    double height;
-    
-    switch (position) {
-      case ArcPosition.left:
-      case ArcPosition.right:
-        width = 20 * sizeMultiplier;
-        height = 100 * sizeMultiplier;
-        break;
-      case ArcPosition.top:
-      case ArcPosition.bottom:
-        width = 100 * sizeMultiplier;
-        height = 20 * sizeMultiplier;
-        break;
-    }
-
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 100),
-      width: width,
-      height: height,
-      child: CustomPaint(
-        size: Size(width, height),
-        painter: ArcPainter(
-          color: arcColor.withOpacity(opacity),
-          strokeWidth: strokeWidth,
-          position: position,
-        ),
-      ),
-    );
-  }
-}
-
-/// Enum for arc positions
-enum ArcPosition { left, right, top, bottom }
-
-/// Painter for G-force arc brackets
-class ArcPainter extends CustomPainter {
-  final Color color;
-  final double strokeWidth;
-  final ArcPosition position;
-
-  ArcPainter({
-    required this.color,
-    required this.strokeWidth,
-    required this.position,
-  });
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = color
-      ..strokeWidth = strokeWidth
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round;
-
-    final path = Path();
-
-    switch (position) {
-      case ArcPosition.left:
-        // Left side arc - curves around left edge
-        path.moveTo(size.width, size.height * 0.2);
-        path.quadraticBezierTo(
-          0, size.height * 0.5,
-          size.width, size.height * 0.8,
-        );
-        break;
-      case ArcPosition.right:
-        // Right side arc - curves around right edge
-        path.moveTo(0, size.height * 0.2);
-        path.quadraticBezierTo(
-          size.width, size.height * 0.5,
-          0, size.height * 0.8,
-        );
-        break;
-      case ArcPosition.top:
-        // Top arc - curves around top edge
-        path.moveTo(size.width * 0.2, size.height);
-        path.quadraticBezierTo(
-          size.width * 0.5, 0,
-          size.width * 0.8, size.height,
-        );
-        break;
-      case ArcPosition.bottom:
-        // Bottom arc - curves around bottom edge
-        path.moveTo(size.width * 0.2, 0);
-        path.quadraticBezierTo(
-          size.width * 0.5, size.height,
-          size.width * 0.8, 0,
-        );
-        break;
-    }
-
-    canvas.drawPath(path, paint);
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
 }
