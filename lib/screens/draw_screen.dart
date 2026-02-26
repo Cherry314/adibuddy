@@ -39,7 +39,7 @@ class _DrawScreenState extends State<DrawScreen> {
   final List<double> widths = [2.0, 4.0, 8.0, 12.0];
 
   bool isPanZoom = false;
-  TransformationController _transformationController = TransformationController();
+  final TransformationController _transformationController = TransformationController();
 
   @override
   void initState() {
@@ -313,16 +313,19 @@ class _StackPainter extends CustomPainter {
     final paint = Paint();
 
     // Draw base image without any filters
-    if (baseImage != null) _drawImageFit(
+    if (baseImage != null) {
+      _drawImageFit(
         canvas, size, baseImage!, paint, isOverlay: false);
+    }
 
     // Draw overlay images with white transparency
     for (final overlay in overlayImages) {
       _drawImageFit(canvas, size, overlay, paint, isOverlay: true);
     }
 
-    for (final s in strokes)
+    for (final s in strokes) {
       _drawStroke(canvas, s);
+    }
     if (currentStroke != null) _drawStroke(canvas, currentStroke!);
   }
 

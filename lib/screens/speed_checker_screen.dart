@@ -22,10 +22,7 @@ class _SpeedCheckerScreenState extends State<SpeedCheckerScreen> {
   double _currentSpeedMph = 0.0; // Speed in miles per hour
   int _currentSpeedRounded = 0;
   bool _isTracking = false;
-  String _statusMessage = 'Tap Start to begin tracking';
-  Color _statusColor = Colors.purple;
   int _maxSpeedMph = 0;
-  double _averageSpeedMph = 0.0;
   int _speedReadings = 0;
   double _totalSpeedMph = 0.0;
 
@@ -33,7 +30,6 @@ class _SpeedCheckerScreenState extends State<SpeedCheckerScreen> {
   int? _speedLimitMph;
   String _speedLimitStatus = 'Unknown';
   int _warningLevel = 0; // 0 = none, 1 = mild (up to 10%), 2 = severe (>10%)
-  DateTime? _lastSpeedLimitFetch;
   Timer? _speedLimitTimer;
 
   // Manual speed limit selection
@@ -88,10 +84,6 @@ class _SpeedCheckerScreenState extends State<SpeedCheckerScreen> {
     // Check if location services are enabled
     serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) {
-      setState(() {
-        _statusMessage = 'Please enable GPS/Location services';
-        _statusColor = Colors.red;
-      });
       return;
     }
 
@@ -100,29 +92,18 @@ class _SpeedCheckerScreenState extends State<SpeedCheckerScreen> {
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
       if (permission == LocationPermission.denied) {
-        setState(() {
-          _statusMessage = 'Location permissions denied';
-          _statusColor = Colors.red;
-        });
         return;
       }
     }
 
     if (permission == LocationPermission.deniedForever) {
-      setState(() {
-        _statusMessage = 'Location permissions permanently denied. Please enable in settings.';
-        _statusColor = Colors.red;
-      });
       return;
     }
 
     // Start listening to position updates
     setState(() {
       _isTracking = true;
-      _statusMessage = 'Tracking active - GPS speed in MPH';
-      _statusColor = Colors.green;
       _maxSpeedMph = 0;
-      _averageSpeedMph = 0.0;
       _speedReadings = 0;
       _totalSpeedMph = 0.0;
       _speedLimitMph = null;
@@ -165,7 +146,6 @@ class _SpeedCheckerScreenState extends State<SpeedCheckerScreen> {
           if (_currentSpeedMph > 0.5) {
             _speedReadings++;
             _totalSpeedMph += _currentSpeedMph;
-            _averageSpeedMph = _totalSpeedMph / _speedReadings;
 
             if (_currentSpeedRounded > _maxSpeedMph) {
               _maxSpeedMph = _currentSpeedRounded;
@@ -178,8 +158,6 @@ class _SpeedCheckerScreenState extends State<SpeedCheckerScreen> {
       },
       onError: (error) {
         setState(() {
-          _statusMessage = 'GPS Error: $error';
-          _statusColor = Colors.red;
           _isTracking = false;
         });
       },
@@ -255,7 +233,6 @@ class _SpeedCheckerScreenState extends State<SpeedCheckerScreen> {
           }
           // Update trip logger with speed limit
           _tripLogger.updateSpeedLimit(_speedLimitMph);
-          _lastSpeedLimitFetch = DateTime.now();
           _updateWarningLevel();
         });
       }
@@ -350,8 +327,6 @@ class _SpeedCheckerScreenState extends State<SpeedCheckerScreen> {
     
     setState(() {
       _isTracking = false;
-      _statusMessage = 'Tracking stopped. Tap Start to resume.';
-      _statusColor = Colors.orange;
       _currentSpeedMps = 0.0;
       _currentSpeedMph = 0.0;
       _currentSpeedRounded = 0;
@@ -388,7 +363,6 @@ class _SpeedCheckerScreenState extends State<SpeedCheckerScreen> {
           _speedLimitStatus = '$speedLimit MPH (Manual)';
           _isManualSpeedLimit = true;
           _tripLogger.updateSpeedLimit(speedLimit);
-          _lastSpeedLimitFetch = DateTime.now();
           _updateWarningLevel();
         });
 
@@ -451,16 +425,16 @@ class _SpeedCheckerScreenState extends State<SpeedCheckerScreen> {
                   decoration: BoxDecoration(
                     color: _speedLimitMph != null && _isTracking
                         ? (_isManualSpeedLimit
-                            ? Colors.orange.withOpacity(0.15)
-                            : const Color(0xFF4CAF50).withOpacity(0.1))
-                        : Colors.grey.withOpacity(0.1),
+                            ? Colors.orange.withValues(alpha: 0.15)
+                            : const Color(0xFF4CAF50).withValues(alpha: 0.1))
+                        : Colors.grey.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
                       color: _speedLimitMph != null && _isTracking
                           ? (_isManualSpeedLimit
-                              ? Colors.orange.withOpacity(0.5)
-                              : const Color(0xFF4CAF50).withOpacity(0.3))
-                          : Colors.grey.withOpacity(0.3),
+                              ? Colors.orange.withValues(alpha: 0.5)
+                              : const Color(0xFF4CAF50).withValues(alpha: 0.3))
+                          : Colors.grey.withValues(alpha: 0.3),
                     ),
                   ),
                   child: Row(
@@ -517,19 +491,19 @@ class _SpeedCheckerScreenState extends State<SpeedCheckerScreen> {
                           ),
                           boxShadow: [
                             BoxShadow(
-                              color: _displayColor.withOpacity(0.3),
+                              color: _displayColor.withValues(alpha: 0.3),
                               blurRadius: 30,
                               spreadRadius: 5,
                             ),
                             BoxShadow(
-                              color: Colors.black.withOpacity(0.1),
+                              color: Colors.black.withValues(alpha: 0.1),
                               blurRadius: 20,
                               offset: const Offset(0, 10),
                             ),
                           ],
                           border: _warningLevel > 0
                               ? Border.all(
-                                  color: _displayColor.withOpacity(0.5),
+                                  color: _displayColor.withValues(alpha: 0.5),
                                   width: 4,
                                 )
                               : null,
@@ -562,7 +536,7 @@ class _SpeedCheckerScreenState extends State<SpeedCheckerScreen> {
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
                                 decoration: BoxDecoration(
-                                  color: _displayColor.withOpacity(0.1),
+                                  color: _displayColor.withValues(alpha: 0.1),
                                   borderRadius: BorderRadius.circular(16),
                                 ),
                                 child: Text(
@@ -635,7 +609,7 @@ class _SpeedCheckerScreenState extends State<SpeedCheckerScreen> {
                       borderRadius: BorderRadius.circular(12),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.purple.withOpacity(0.1),
+                          color: Colors.purple.withValues(alpha: 0.1),
                           blurRadius: 10,
                           offset: const Offset(0, 3),
                         ),
@@ -789,7 +763,7 @@ class _SpeedCheckerScreenState extends State<SpeedCheckerScreen> {
           borderRadius: BorderRadius.circular(10),
           boxShadow: [
             BoxShadow(
-              color: (isSelected ? Colors.orange : Colors.purple).withOpacity(0.3),
+              color: (isSelected ? Colors.orange : Colors.purple).withValues(alpha: 0.3),
               blurRadius: 6,
               offset: const Offset(0, 3),
             ),
@@ -879,7 +853,7 @@ class _SpeedCheckerScreenState extends State<SpeedCheckerScreen> {
       child: CustomPaint(
         size: Size(width, height),
         painter: ArcPainter(
-          color: arcColor.withOpacity(opacity),
+          color: arcColor.withValues(alpha: opacity),
           strokeWidth: strokeWidth,
           position: position,
         ),

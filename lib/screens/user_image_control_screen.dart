@@ -653,10 +653,6 @@ class _UserImageControlScreenState extends State<UserImageControlScreen> {
                     );
                   }
 
-                  // Group images by category
-                  final imagesByCategory = userImageService
-                      .getUserImagesByCategory();
-
                   return Column(
                     children: userImageService.categories.map((category) {
                       final imagesInCategory = userImageService.userImages

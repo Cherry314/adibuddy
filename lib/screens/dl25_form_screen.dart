@@ -236,7 +236,7 @@ class _DL25FormScreenState extends State<DL25FormScreen> {
   Future<void> _selectDate() async {
     final DateTime? picked = await showDatePicker(
       context: context,
-      initialDate: _testDate ?? DateTime.now(),
+      initialDate: _testDate,
       firstDate: DateTime(2020),
       lastDate: DateTime(2030),
     );
@@ -248,7 +248,7 @@ class _DL25FormScreenState extends State<DL25FormScreen> {
   Future<void> _selectTime() async {
     final TimeOfDay? picked = await showTimePicker(
       context: context,
-      initialTime: _testTime ?? TimeOfDay.now(),
+      initialTime: _testTime,
     );
     if (picked != null) {
       setState(() => _testTime = picked);

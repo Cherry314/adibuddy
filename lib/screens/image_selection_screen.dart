@@ -8,7 +8,7 @@ import '../models/image_group.dart';
 
 
 class ImageSelectionScreen extends StatefulWidget {
-  const ImageSelectionScreen({Key? key}) : super(key: key);
+  const ImageSelectionScreen({super.key});
 
   @override
   State<ImageSelectionScreen> createState() => _ImageSelectionScreenState();

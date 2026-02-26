@@ -367,7 +367,6 @@ class UserImageService extends ChangeNotifier {
 
       // Restore images
       final List<dynamic> imagesData = metadata['images'];
-      final Directory extractedImagesDir = Directory('$restoreDir/images');
 
       for (var imageData in imagesData) {
         final String imageId = imageData['id'];

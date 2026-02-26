@@ -344,12 +344,12 @@ class _SpeedCalibrationScreenState extends State<SpeedCalibrationScreen> {
   }
 
   /// Apply calibration correction to a GPS speed reading
-  static double applyCalibration(double gpsSpeedMph) {
-    // This will be called from the speed checker screen
-    // For now, just return the raw GPS speed
-    // The actual calibration values will be loaded from SharedPreferences there
-    return gpsSpeedMph;
-  }
+  // static double applyCalibration(double gpsSpeedMph) {
+  //   // This will be called from the speed checker screen
+  //   // For now, just return the raw GPS speed
+  //   // The actual calibration values will be loaded from SharedPreferences there
+  //   return gpsSpeedMph;
+  // }
 
   @override
   void dispose() {

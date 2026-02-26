@@ -5,15 +5,7 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import '../models/test_result.dart';
-
-import 'dart:io';
 import 'package:flutter/foundation.dart';
-import 'package:intl/intl.dart';
-import 'package:pdf/pdf.dart';
-import 'package:pdf/widgets.dart' as pw;
-import 'package:path_provider/path_provider.dart';
-import 'package:share_plus/share_plus.dart';
-import '../models/test_result.dart';
 
 class PdfService {
   static Future<void> generateAndSharePdf(TestResult test) async {

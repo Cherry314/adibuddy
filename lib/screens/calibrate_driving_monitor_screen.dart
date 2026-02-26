@@ -7,7 +7,7 @@ import 'speed_calibration_screen.dart';
 /// Allows users to fine-tune speed limit detection, GPS accuracy settings,
 /// and manual speed limit zone management.
 class CalibrateDrivingMonitorScreen extends StatefulWidget {
-  const CalibrateDrivingMonitorScreen({Key? key}) : super(key: key);
+  const CalibrateDrivingMonitorScreen({super.key});
 
   @override
   State<CalibrateDrivingMonitorScreen> createState() => _CalibrateDrivingMonitorScreenState();
@@ -67,7 +67,7 @@ class _CalibrateDrivingMonitorScreenState extends State<CalibrateDrivingMonitorS
                   borderRadius: BorderRadius.circular(16),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.purple.withOpacity(0.1),
+                      color: Colors.purple.withValues(alpha: 0.1),
                       blurRadius: 15,
                       offset: const Offset(0, 5),
                     ),
@@ -307,7 +307,7 @@ class _CalibrateDrivingMonitorScreenState extends State<CalibrateDrivingMonitorS
                         ),
                       ),
                       value: _autoDetectSpeedLimits,
-                      activeColor: Colors.purple[400],
+                      activeThumbColor: Colors.purple[400],
                       onChanged: (value) {
                         setState(() {
                           _autoDetectSpeedLimits = value;
@@ -437,7 +437,7 @@ class _CalibrateDrivingMonitorScreenState extends State<CalibrateDrivingMonitorS
                     ),
                   ),
                   value: _showDebugInfo,
-                  activeColor: Colors.purple[400],
+                  activeThumbColor: Colors.purple[400],
                   onChanged: (value) {
                     setState(() {
                       _showDebugInfo = value;
@@ -500,7 +500,7 @@ class _CalibrateDrivingMonitorScreenState extends State<CalibrateDrivingMonitorS
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: Colors.purple.withOpacity(0.1),
+            color: Colors.purple.withValues(alpha: 0.1),
             blurRadius: 10,
             offset: const Offset(0, 3),
           ),
