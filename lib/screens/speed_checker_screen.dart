@@ -3,9 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import '../widgets/app_drawer.dart';
 import '../services/speed_limit_service.dart';
+import '../services/speed_limit_cache_service.dart';
 
 class SpeedCheckerScreen extends StatefulWidget {
-  const SpeedCheckerScreen({Key? key}) : super(key: key);
+  const SpeedCheckerScreen({super.key});
 
   @override
   State<SpeedCheckerScreen> createState() => _SpeedCheckerScreenState();
@@ -30,6 +31,9 @@ class _SpeedCheckerScreenState extends State<SpeedCheckerScreen> {
   int _warningLevel = 0; // 0 = none, 1 = mild (up to 10%), 2 = severe (>10%)
   DateTime? _lastSpeedLimitFetch;
   Timer? _speedLimitTimer;
+
+  // Manual speed limit selection
+  bool _isManualSpeedLimit = false;
 
   // Warning flash animation
   bool _showWarningFlash = false;
@@ -157,11 +161,20 @@ class _SpeedCheckerScreenState extends State<SpeedCheckerScreen> {
 
       if (mounted) {
         setState(() {
-          _speedLimitMph = speedLimit;
-          if (speedLimit != null) {
+          // Only update if we don't have a manual override, or if API returns a different value
+          if (_isManualSpeedLimit && speedLimit != null && speedLimit != _speedLimitMph) {
+            // API found a different speed limit than manual - update to API value
+            _speedLimitMph = speedLimit;
             _speedLimitStatus = '$speedLimit MPH';
-          } else {
-            _speedLimitStatus = 'Unknown';
+            _isManualSpeedLimit = false;
+          } else if (!_isManualSpeedLimit) {
+            // No manual override, use API/cache value
+            _speedLimitMph = speedLimit;
+            if (speedLimit != null) {
+              _speedLimitStatus = '$speedLimit MPH';
+            } else {
+              _speedLimitStatus = 'Unknown';
+            }
           }
           _lastSpeedLimitFetch = DateTime.now();
           _updateWarningLevel();
@@ -170,7 +183,9 @@ class _SpeedCheckerScreenState extends State<SpeedCheckerScreen> {
     } catch (e) {
       if (mounted) {
         setState(() {
-          _speedLimitStatus = 'Error';
+          if (!_isManualSpeedLimit) {
+            _speedLimitStatus = 'Error';
+          }
         });
       }
     }
@@ -230,7 +245,123 @@ class _SpeedCheckerScreenState extends State<SpeedCheckerScreen> {
       _speedLimitStatus = 'Unknown';
       _warningLevel = 0;
       _showWarningFlash = false;
+      _isManualSpeedLimit = false;
     });
+  }
+
+  /// Manually set the speed limit when user taps a speed limit button
+  Future<void> _setManualSpeedLimit(int speedLimit) async {
+    if (!_isTracking) return;
+
+    try {
+      final position = await Geolocator.getCurrentPosition();
+
+      // Cache this speed limit at the current location
+      await SpeedLimitCacheService.cacheSpeedLimit(
+        position.latitude,
+        position.longitude,
+        speedLimit,
+        roadName: 'Manual',
+      );
+
+      if (mounted) {
+        setState(() {
+          _speedLimitMph = speedLimit;
+          _speedLimitStatus = '$speedLimit MPH (Manual)';
+          _isManualSpeedLimit = true;
+          _lastSpeedLimitFetch = DateTime.now();
+          _updateWarningLevel();
+        });
+
+        // Show brief confirmation
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Speed limit set to $speedLimit MPH'),
+            duration: const Duration(seconds: 2),
+            backgroundColor: Colors.green[600],
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to set speed limit: $e'),
+            duration: const Duration(seconds: 2),
+            backgroundColor: Colors.red[600],
+          ),
+        );
+      }
+    }
+  }
+
+  void _showStatsDialog() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text(
+            'Speed Statistics',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: Colors.purple,
+            ),
+          ),
+          content: Container(
+            padding: const EdgeInsets.all(8),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                _buildStatItem(
+                  'Max Speed',
+                  '$_maxSpeedMph',
+                  'MPH',
+                  Icons.trending_up,
+                  Colors.purple,
+                ),
+                Container(
+                  width: 1,
+                  height: 50,
+                  color: Colors.grey[300],
+                ),
+                _buildStatItem(
+                  'Average',
+                  '${_averageSpeedMph.round()}',
+                  'MPH',
+                  Icons.speed,
+                  Colors.blue,
+                ),
+                Container(
+                  width: 1,
+                  height: 50,
+                  color: Colors.grey[300],
+                ),
+                _buildStatItem(
+                  'Readings',
+                  '$_speedReadings',
+                  'updates',
+                  Icons.update,
+                  Colors.teal,
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text(
+                'Close',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   @override
@@ -245,7 +376,7 @@ class _SpeedCheckerScreenState extends State<SpeedCheckerScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Speed Checker'),
+        title: const Text('Speed Monitor'),
         backgroundColor: Colors.purple[400],
       ),
       drawer: const AppDrawer(currentRoute: '/speed-checker'),
@@ -259,86 +390,58 @@ class _SpeedCheckerScreenState extends State<SpeedCheckerScreen> {
         ),
         child: SafeArea(
           child: Padding(
-            padding: const EdgeInsets.all(20.0),
+            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
             child: Column(
               children: [
-                // Status indicator
+                // Speed Limit Display - Always visible
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                   decoration: BoxDecoration(
-                    color: _statusColor.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: _statusColor.withOpacity(0.3)),
+                    color: _speedLimitMph != null && _isTracking
+                        ? (_isManualSpeedLimit
+                            ? Colors.orange.withOpacity(0.15)
+                            : const Color(0xFF4CAF50).withOpacity(0.1))
+                        : Colors.grey.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: _speedLimitMph != null && _isTracking
+                          ? (_isManualSpeedLimit
+                              ? Colors.orange.withOpacity(0.5)
+                              : const Color(0xFF4CAF50).withOpacity(0.3))
+                          : Colors.grey.withOpacity(0.3),
+                    ),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Icon(
-                        _isTracking ? Icons.location_on : Icons.location_off,
-                        color: _statusColor,
-                        size: 16,
+                        _isTracking && _isManualSpeedLimit ? Icons.edit_road : Icons.speed,
+                        color: _speedLimitMph != null && _isTracking
+                            ? (_isManualSpeedLimit ? Colors.orange : const Color(0xFF4CAF50))
+                            : Colors.grey,
+                        size: 18,
                       ),
                       const SizedBox(width: 8),
                       Text(
-                        _statusMessage,
+                        _isTracking ? 'Speed Limit: $_speedLimitStatus' : 'Speed Limit: Waiting',
                         style: TextStyle(
-                          color: _statusColor,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
+                          color: _speedLimitMph != null && _isTracking
+                              ? (_isManualSpeedLimit ? Colors.orange[800] : const Color(0xFF2E7D32))
+                              : Colors.grey[600],
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                     ],
                   ),
                 ),
-                const SizedBox(height: 20),
-
-                // Speed Limit Display
-                if (_isTracking) ...[
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                    decoration: BoxDecoration(
-                      color: _speedLimitMph != null
-                          ? const Color(0xFF4CAF50).withOpacity(0.1)
-                          : Colors.grey.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: _speedLimitMph != null
-                            ? const Color(0xFF4CAF50).withOpacity(0.3)
-                            : Colors.grey.withOpacity(0.3),
-                      ),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.speed,
-                          color: _speedLimitMph != null
-                              ? const Color(0xFF4CAF50)
-                              : Colors.grey,
-                          size: 20,
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          'Speed Limit: $_speedLimitStatus',
-                          style: TextStyle(
-                            color: _speedLimitMph != null
-                                ? const Color(0xFF2E7D32)
-                                : Colors.grey[600],
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 15),
-                ],
+                const SizedBox(height: 10),
                 
                 // Main Speed Display with Warning
                 AnimatedContainer(
                   duration: const Duration(milliseconds: 200),
-                  width: 260,
-                  height: 260,
+                  width: 240,
+                  height: 240,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     gradient: LinearGradient(
@@ -381,16 +484,16 @@ class _SpeedCheckerScreenState extends State<SpeedCheckerScreen> {
                           Icon(
                             Icons.warning_amber_rounded,
                             color: Colors.red,
-                            size: 32,
+                            size: 28,
                           ),
                         if (_warningLevel == 2 && !_showWarningFlash)
-                          const SizedBox(height: 8),
+                          const SizedBox(height: 6),
                         
                         // Speed value
                         Text(
                           _currentSpeedRounded.toString(),
                           style: TextStyle(
-                            fontSize: 90,
+                            fontSize: 80,
                             fontWeight: FontWeight.bold,
                             color: _displayColor,
                             height: 1,
@@ -398,7 +501,7 @@ class _SpeedCheckerScreenState extends State<SpeedCheckerScreen> {
                         ),
                         // Unit label
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
                           decoration: BoxDecoration(
                             color: _displayColor.withOpacity(0.1),
                             borderRadius: BorderRadius.circular(16),
@@ -406,7 +509,7 @@ class _SpeedCheckerScreenState extends State<SpeedCheckerScreen> {
                           child: Text(
                             'MPH',
                             style: TextStyle(
-                              fontSize: 22,
+                              fontSize: 20,
                               fontWeight: FontWeight.bold,
                               color: _displayColor,
                             ),
@@ -416,141 +519,139 @@ class _SpeedCheckerScreenState extends State<SpeedCheckerScreen> {
                     ),
                   ),
                 ),
-                const SizedBox(height: 15),
+                const SizedBox(height: 8),
 
-                // Warning Message
-                if (_isTracking && _warningLevel > 0) ...[
-                  AnimatedContainer(
-                    duration: const Duration(milliseconds: 300),
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                const Spacer(),
+
+                // Manual Speed Limit Buttons Grid (only shown when tracking) - Above Start/Stop button
+                if (_isTracking) ...[
+                  Container(
+                    padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
-                      color: _warningLevel == 2
-                          ? Colors.red.withOpacity(0.15)
-                          : Colors.orange.withOpacity(0.15),
+                      color: Colors.white,
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: _warningLevel == 2
-                            ? Colors.red.withOpacity(0.5)
-                            : Colors.orange.withOpacity(0.5),
-                      ),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          _warningLevel == 2 ? Icons.error : Icons.warning,
-                          color: _warningLevel == 2 ? Colors.red : Colors.orange,
-                          size: 20,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.purple.withOpacity(0.1),
+                          blurRadius: 10,
+                          offset: const Offset(0, 3),
                         ),
-                        const SizedBox(width: 8),
-                        Flexible(
-                          child: Text(
-                            SpeedLimitService.getWarningMessage(_warningLevel, _speedLimitMph),
-                            style: TextStyle(
-                              color: _warningLevel == 2 ? Colors.red[700] : Colors.orange[800],
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
+                      ],
+                    ),
+                    child: Column(
+                      children: [
+                        // Header
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.edit_road,
+                              size: 16,
+                              color: Colors.purple[600],
                             ),
-                            textAlign: TextAlign.center,
-                          ),
+                            const SizedBox(width: 6),
+                            Text(
+                              'Set Speed Limit',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.purple[700],
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        // Speed limit buttons grid - 3x2 stretched horizontally
+                        Row(
+                          children: [
+                            Expanded(child: _buildSpeedLimitButton(20)),
+                            const SizedBox(width: 6),
+                            Expanded(child: _buildSpeedLimitButton(30)),
+                            const SizedBox(width: 6),
+                            Expanded(child: _buildSpeedLimitButton(40)),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        Row(
+                          children: [
+                            Expanded(child: _buildSpeedLimitButton(50)),
+                            const SizedBox(width: 6),
+                            Expanded(child: _buildSpeedLimitButton(60)),
+                            const SizedBox(width: 6),
+                            Expanded(child: _buildSpeedLimitButton(70)),
+                          ],
                         ),
                       ],
                     ),
                   ),
-                  const SizedBox(height: 15),
+                  const SizedBox(height: 8),
                 ],
-                
-                // Speed statistics
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.purple.withOpacity(0.1),
-                        blurRadius: 15,
-                        offset: const Offset(0, 5),
-                      ),
-                    ],
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: [
-                      _buildStatItem(
-                        'Max Speed',
-                        '$_maxSpeedMph',
-                        'MPH',
-                        Icons.trending_up,
-                        Colors.purple,
-                      ),
-                      Container(
-                        width: 1,
-                        height: 50,
-                        color: Colors.grey[300],
-                      ),
-                      _buildStatItem(
-                        'Average',
-                        '${_averageSpeedMph.round()}',
-                        'MPH',
-                        Icons.speed,
-                        Colors.blue,
-                      ),
-                      Container(
-                        width: 1,
-                        height: 50,
-                        color: Colors.grey[300],
-                      ),
-                      _buildStatItem(
-                        'Readings',
-                        '$_speedReadings',
-                        'updates',
-                        Icons.update,
-                        Colors.teal,
-                      ),
-                    ],
-                  ),
-                ),
-                const Spacer(),
-                
-                // Start/Stop button
-                SizedBox(
-                  width: double.infinity,
-                  height: 60,
-                  child: ElevatedButton.icon(
-                    onPressed: _isTracking ? _stopTracking : _startTracking,
-                    icon: Icon(
-                      _isTracking ? Icons.stop : Icons.play_arrow,
-                      size: 28,
-                    ),
-                    label: Text(
-                      _isTracking ? 'Stop Tracking' : 'Start Tracking',
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
+
+                // Start/Stop button and Stats button row
+                Row(
+                  children: [
+                    // Start/Stop button (3/4 width)
+                    Expanded(
+                      flex: 3,
+                      child: SizedBox(
+                        height: 36,
+                        child: ElevatedButton.icon(
+                          onPressed: _isTracking ? _stopTracking : _startTracking,
+                          icon: Icon(
+                            _isTracking ? Icons.stop : Icons.play_arrow,
+                            size: 22,
+                          ),
+                          label: Text(
+                            _isTracking ? 'Stop Tracking' : 'Start Tracking',
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: _isTracking ? Colors.red[400] : Colors.purple[400],
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            elevation: 4,
+                          ),
+                        ),
                       ),
                     ),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: _isTracking ? Colors.red[400] : Colors.purple[400],
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
+                    const SizedBox(width: 8),
+                    // Stats button (1/4 width)
+                    Expanded(
+                      flex: 1,
+                      child: SizedBox(
+                        height: 36,
+                        child: ElevatedButton.icon(
+                          onPressed: _showStatsDialog,
+                          icon: const Icon(
+                            Icons.bar_chart,
+                            size: 20,
+                          ),
+                          label: const Text(
+                            '',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.blue[400],
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            elevation: 4,
+                          ),
+                        ),
                       ),
-                      elevation: 4,
                     ),
-                  ),
+                  ],
                 ),
-                const SizedBox(height: 20),
-                
-                // Help text
-                Text(
-                  'Use this feature while driving to check your speed.\nEnsure GPS is enabled for accurate readings.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey[600],
-                  ),
-                ),
+                const SizedBox(height: 8),
               ],
             ),
           ),
@@ -589,6 +690,61 @@ class _SpeedCheckerScreenState extends State<SpeedCheckerScreen> {
           ),
         ),
       ],
+    );
+  }
+
+  /// Build a speed limit button with the given speed value
+  Widget _buildSpeedLimitButton(int speedLimit) {
+    final isSelected = _speedLimitMph == speedLimit && _isManualSpeedLimit;
+
+    return GestureDetector(
+      onTap: () => _setManualSpeedLimit(speedLimit),
+      child: Container(
+        width: 78,
+        height: 48,
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: isSelected
+                ? [Colors.orange[400]!, Colors.orange[600]!]
+                : [Colors.purple[300]!, Colors.purple[500]!],
+          ),
+          borderRadius: BorderRadius.circular(10),
+          boxShadow: [
+            BoxShadow(
+              color: (isSelected ? Colors.orange : Colors.purple).withOpacity(0.3),
+              blurRadius: 6,
+              offset: const Offset(0, 3),
+            ),
+          ],
+          border: isSelected
+              ? Border.all(color: Colors.orange[800]!, width: 3)
+              : null,
+        ),
+        child: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                '$speedLimit',
+                style: const TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
+              const Text(
+                'MPH',
+                style: TextStyle(
+                  fontSize: 9,
+                  color: Colors.white70,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
