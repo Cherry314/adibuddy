@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../screens/home_screen.dart';
 import '../screens/image_selection_screen.dart';
 import '../screens/speed_checker_screen.dart';
 import '../screens/calibrate_driving_monitor_screen.dart';
@@ -56,6 +57,19 @@ class AppDrawer extends StatelessWidget {
                   ),
                 ],
               ),
+            ),
+            _buildDrawerItem(
+              context,
+              icon: Icons.home,
+              title: 'Home',
+              route: '/home',
+              isSelected: currentRoute == '/home',
+              onTap: () {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(builder: (_) => const HomeScreen()),
+                );
+              },
             ),
             _buildDrawerItem(
               context,
@@ -147,7 +161,7 @@ class AppDrawer extends StatelessWidget {
             _buildDrawerItem(
               context,
               icon: Icons.speed,
-              title: '  Calibrate Speed',
+              title: 'Calibrate Speed',
               route: '/speed-calibration',
               isSelected: currentRoute == '/speed-calibration',
               onTap: () {

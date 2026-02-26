@@ -6,6 +6,8 @@ import 'package:sensors_plus/sensors_plus.dart';
 import '../widgets/app_drawer.dart';
 import '../services/speed_limit_service.dart';
 import '../services/speed_limit_cache_service.dart';
+import '../services/trip_logger_service.dart';
+import 'trip_map_screen.dart';
 
 class SpeedCheckerScreen extends StatefulWidget {
   const SpeedCheckerScreen({super.key});
@@ -56,6 +58,9 @@ class _SpeedCheckerScreenState extends State<SpeedCheckerScreen> {
   // Warning flash animation
   bool _showWarningFlash = false;
   Timer? _warningFlashTimer;
+
+  // Trip logger for recording journey data
+  final TripLoggerService _tripLogger = TripLoggerService();
 
   // Speed display colors based on speed ranges
   Color get _speedColor {
@@ -125,6 +130,10 @@ class _SpeedCheckerScreenState extends State<SpeedCheckerScreen> {
       _warningLevel = 0;
     });
 
+    // Start trip logger
+    _tripLogger.clearData();
+    _tripLogger.startLogging();
+
     // Start speed limit timer (fetch every 10 seconds)
     _speedLimitTimer = Timer.periodic(const Duration(seconds: 10), (_) {
       _fetchSpeedLimit();
@@ -147,6 +156,10 @@ class _SpeedCheckerScreenState extends State<SpeedCheckerScreen> {
           // Apply calibration: Corrected = (GPS - offset) / multiplier
           _currentSpeedMph = (rawSpeedMph - _speedCalibrationOffset) / _speedCalibrationMultiplier;
           _currentSpeedRounded = _currentSpeedMph.round();
+
+          // Update trip logger with position and speed
+          _tripLogger.updatePosition(position.latitude, position.longitude);
+          _tripLogger.updateSpeed(_currentSpeedMph);
 
           // Update statistics (only count when moving)
           if (_currentSpeedMph > 0.5) {
@@ -201,6 +214,9 @@ class _SpeedCheckerScreenState extends State<SpeedCheckerScreen> {
           _gForceBackward = longitudinalG > 0.05 ? longitudinalG.abs() : 0; // Braking (positive Z)
         });
         
+        // Update trip logger with G-forces
+        _tripLogger.updateGForces(lateralG, longitudinalG);
+        
         // Debug output
         debugPrint('Accel: x=${event.x.toStringAsFixed(2)}, y=${event.y.toStringAsFixed(2)}, z=${event.z.toStringAsFixed(2)} | G: L=${_gForceLeft.toStringAsFixed(2)} R=${_gForceRight.toStringAsFixed(2)} F=${_gForceForward.toStringAsFixed(2)} B=${_gForceBackward.toStringAsFixed(2)}');
       },
@@ -237,6 +253,8 @@ class _SpeedCheckerScreenState extends State<SpeedCheckerScreen> {
               _speedLimitStatus = 'Unknown';
             }
           }
+          // Update trip logger with speed limit
+          _tripLogger.updateSpeedLimit(_speedLimitMph);
           _lastSpeedLimitFetch = DateTime.now();
           _updateWarningLevel();
         });
@@ -327,6 +345,9 @@ class _SpeedCheckerScreenState extends State<SpeedCheckerScreen> {
     _warningFlashTimer?.cancel();
     _accelerometerSubscription?.cancel();
     
+    // Stop trip logging
+    _tripLogger.stopLogging();
+    
     setState(() {
       _isTracking = false;
       _statusMessage = 'Tracking stopped. Tap Start to resume.';
@@ -366,6 +387,7 @@ class _SpeedCheckerScreenState extends State<SpeedCheckerScreen> {
           _speedLimitMph = speedLimit;
           _speedLimitStatus = '$speedLimit MPH (Manual)';
           _isManualSpeedLimit = true;
+          _tripLogger.updateSpeedLimit(speedLimit);
           _lastSpeedLimitFetch = DateTime.now();
           _updateWarningLevel();
         });
@@ -392,81 +414,13 @@ class _SpeedCheckerScreenState extends State<SpeedCheckerScreen> {
     }
   }
 
-  void _showStatsDialog() {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text(
-            'Speed Statistics',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              color: Colors.purple,
-            ),
-          ),
-          content: Container(
-            padding: const EdgeInsets.all(8),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                _buildStatItem(
-                  'Max Speed',
-                  '$_maxSpeedMph',
-                  'MPH',
-                  Icons.trending_up,
-                  Colors.purple,
-                ),
-                Container(
-                  width: 1,
-                  height: 50,
-                  color: Colors.grey[300],
-                ),
-                _buildStatItem(
-                  'Average',
-                  '${_averageSpeedMph.round()}',
-                  'MPH',
-                  Icons.speed,
-                  Colors.blue,
-                ),
-                Container(
-                  width: 1,
-                  height: 50,
-                  color: Colors.grey[300],
-                ),
-                _buildStatItem(
-                  'Readings',
-                  '$_speedReadings',
-                  'updates',
-                  Icons.update,
-                  Colors.teal,
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text(
-                'Close',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
   @override
   void dispose() {
     _positionStreamSubscription?.cancel();
     _speedLimitTimer?.cancel();
     _warningFlashTimer?.cancel();
     _accelerometerSubscription?.cancel();
+    _tripLogger.dispose();
     super.dispose();
   }
 
@@ -537,8 +491,8 @@ class _SpeedCheckerScreenState extends State<SpeedCheckerScreen> {
 
                 // Main Speed Display with G-Force Arc Brackets
                 SizedBox(
-                  width: 280,
-                  height: 280,
+                  width: 320,
+                  height: 320,
                   child: Stack(
                     alignment: Alignment.center,
                     children: [
@@ -625,41 +579,41 @@ class _SpeedCheckerScreenState extends State<SpeedCheckerScreen> {
                         ),
                       ),
                       // Arcs drawn ON TOP of circle (after circle in Stack)
-                      // Left arc bracket (for right turn G-force)
+                      // Left arc bracket (for right turn G-force) - positioned outside the circle
                       Positioned(
-                        left: 5,
-                        top: 60,
-                        bottom: 60,
+                        left: 10,
+                        top: 80,
+                        bottom: 80,
                         child: _buildGForceArc(
                           gForce: _gForceRight,
                           position: ArcPosition.left,
                         ),
                       ),
-                      // Right arc bracket (for left turn G-force)
+                      // Right arc bracket (for left turn G-force) - positioned outside the circle
                       Positioned(
-                        right: 5,
-                        top: 60,
-                        bottom: 60,
+                        right: 10,
+                        top: 80,
+                        bottom: 80,
                         child: _buildGForceArc(
                           gForce: _gForceLeft,
                           position: ArcPosition.right,
                         ),
                       ),
-                      // Top arc bracket (for deceleration/braking)
+                      // Top arc bracket (for deceleration/braking) - positioned outside the circle
                       Positioned(
-                        top: 5,
-                        left: 60,
-                        right: 60,
+                        top: 10,
+                        left: 80,
+                        right: 80,
                         child: _buildGForceArc(
                           gForce: _gForceBackward,
                           position: ArcPosition.top,
                         ),
                       ),
-                      // Bottom arc bracket (for acceleration)
+                      // Bottom arc bracket (for acceleration) - positioned outside the circle
                       Positioned(
-                        bottom: 5,
-                        left: 60,
-                        right: 60,
+                        bottom: 10,
+                        left: 80,
+                        right: 80,
                         child: _buildGForceArc(
                           gForce: _gForceForward,
                           position: ArcPosition.bottom,
@@ -736,12 +690,12 @@ class _SpeedCheckerScreenState extends State<SpeedCheckerScreen> {
                   const SizedBox(height: 8),
                 ],
 
-                // Start/Stop button and Stats button row
+                // Start/Stop button and Map button row
                 Row(
                   children: [
-                    // Start/Stop button (3/4 width)
+                    // Start/Stop button (2/3 width - approximately 67%)
                     Expanded(
-                      flex: 3,
+                      flex: 2,
                       child: SizedBox(
                         height: 36,
                         child: ElevatedButton.icon(
@@ -769,31 +723,37 @@ class _SpeedCheckerScreenState extends State<SpeedCheckerScreen> {
                       ),
                     ),
                     const SizedBox(width: 8),
-                    // Stats button (1/4 width)
+                    // Map button (1/3 width - approximately 33%)
                     Expanded(
                       flex: 1,
                       child: SizedBox(
                         height: 36,
-                        child: ElevatedButton.icon(
-                          onPressed: _showStatsDialog,
-                          icon: const Icon(
-                            Icons.bar_chart,
-                            size: 20,
-                          ),
-                          label: const Text(
-                            '',
+                        child: ElevatedButton(
+                          onPressed: _tripLogger.dataPointCount > 0
+                              ? () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) => TripMapScreen(tripLogger: _tripLogger),
+                                    ),
+                                  );
+                                }
+                              : null,
+                          child: const Text(
+                            'Map',
                             style: TextStyle(
-                              fontSize: 12,
+                              fontSize: 14,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.blue[400],
+                            backgroundColor: Colors.green[400],
                             foregroundColor: Colors.white,
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12),
                             ),
                             elevation: 4,
+                            disabledBackgroundColor: Colors.grey[300],
                           ),
                         ),
                       ),
@@ -806,39 +766,6 @@ class _SpeedCheckerScreenState extends State<SpeedCheckerScreen> {
           ),
         ),
       ),
-    );
-  }
-
-  Widget _buildStatItem(String label, String value, String unit, IconData icon, Color color) {
-    return Column(
-      children: [
-        Icon(icon, color: color, size: 22),
-        const SizedBox(height: 6),
-        Text(
-          value,
-          style: TextStyle(
-            fontSize: 22,
-            fontWeight: FontWeight.bold,
-            color: color,
-          ),
-        ),
-        Text(
-          unit,
-          style: TextStyle(
-            fontSize: 9,
-            color: Colors.grey[600],
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 10,
-            color: Colors.grey[500],
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-      ],
     );
   }
 
@@ -910,20 +837,20 @@ class _SpeedCheckerScreenState extends State<SpeedCheckerScreen> {
     if (gForce >= _severeThreshold) {
       arcColor = Colors.red;
       opacity = 0.9;
-      strokeWidth = 5;
+      strokeWidth = 10;
     } else if (gForce >= _moderateThreshold) {
       arcColor = Colors.orange;
       opacity = 0.8;
-      strokeWidth = 5;
+      strokeWidth = 10;
     } else if (gForce >= _mildThreshold) {
       arcColor = Colors.white;
       opacity = 0.7;
-      strokeWidth = 5;
+      strokeWidth = 10;
     } else {
       // No movement detected - show green
       arcColor = Colors.green;
       opacity = 0.5;
-      strokeWidth = 5;
+      strokeWidth = 10;
     }
 
     // Calculate size based on G-force intensity
@@ -988,7 +915,7 @@ class ArcPainter extends CustomPainter {
 
     switch (position) {
       case ArcPosition.left:
-        // Left side arc - curves around left edge
+        // Left side arc - curves outward to the left
         path.moveTo(size.width, size.height * 0.2);
         path.quadraticBezierTo(
           0, size.height * 0.5,
@@ -996,7 +923,7 @@ class ArcPainter extends CustomPainter {
         );
         break;
       case ArcPosition.right:
-        // Right side arc - curves around right edge
+        // Right side arc - curves outward to the right
         path.moveTo(0, size.height * 0.2);
         path.quadraticBezierTo(
           size.width, size.height * 0.5,
@@ -1004,7 +931,7 @@ class ArcPainter extends CustomPainter {
         );
         break;
       case ArcPosition.top:
-        // Top arc - curves around top edge
+        // Top arc - curves upward (toward y=0)
         path.moveTo(size.width * 0.2, size.height);
         path.quadraticBezierTo(
           size.width * 0.5, 0,
@@ -1012,7 +939,7 @@ class ArcPainter extends CustomPainter {
         );
         break;
       case ArcPosition.bottom:
-        // Bottom arc - curves around bottom edge
+        // Bottom arc - curves downward (toward y=size.height)
         path.moveTo(size.width * 0.2, 0);
         path.quadraticBezierTo(
           size.width * 0.5, size.height,
