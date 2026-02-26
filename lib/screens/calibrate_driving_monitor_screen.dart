@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../widgets/app_drawer.dart';
 import 'speed_calibration_screen.dart';
 
@@ -17,6 +18,26 @@ class _CalibrateDrivingMonitorScreenState extends State<CalibrateDrivingMonitorS
   bool _autoDetectSpeedLimits = true;
   double _cacheRadius = 100.0; // meters
   bool _showDebugInfo = false;
+
+  // G-force calibration thresholds
+  double _gForceMinimum = 0.15;
+  double _gForceModerate = 0.3;
+  double _gForceSevere = 0.5;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadGForceSettings();
+  }
+
+  Future<void> _loadGForceSettings() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _gForceMinimum = prefs.getDouble('gforce_minimum') ?? 0.15;
+      _gForceModerate = prefs.getDouble('gforce_moderate') ?? 0.3;
+      _gForceSevere = prefs.getDouble('gforce_severe') ?? 0.5;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -118,6 +139,106 @@ class _CalibrateDrivingMonitorScreenState extends State<CalibrateDrivingMonitorS
                       MaterialPageRoute(builder: (_) => const SpeedCalibrationScreen()),
                     );
                   },
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              // G-Force Thresholds Section
+              _buildSectionHeader('G-Force Thresholds'),
+              const SizedBox(height: 12),
+              _buildCard(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'G-Force Minimum: ${_gForceMinimum.toStringAsFixed(2)} G',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.purple[700],
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Slider(
+                      value: _gForceMinimum,
+                      min: 0.1,
+                      max: 1.0,
+                      divisions: 9,
+                      label: '${_gForceMinimum.toStringAsFixed(2)} G',
+                      activeColor: Colors.green[400],
+                      onChanged: (value) {
+                        setState(() {
+                          _gForceMinimum = value;
+                          if (_gForceModerate <= _gForceMinimum) {
+                            _gForceModerate = _gForceMinimum + 0.1;
+                          }
+                          if (_gForceSevere <= _gForceModerate) {
+                            _gForceSevere = _gForceModerate + 0.1;
+                          }
+                        });
+                        _saveGForceSettings();
+                      },
+                    ),
+                    const SizedBox(height: 16),
+
+                    Text(
+                      'G-Force Moderate: ${_gForceModerate.toStringAsFixed(2)} G',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.purple[700],
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Slider(
+                      value: _gForceModerate,
+                      min: 0.2,
+                      max: 2.0,
+                      divisions: 18,
+                      label: '${_gForceModerate.toStringAsFixed(2)} G',
+                      activeColor: Colors.orange[400],
+                      onChanged: (value) {
+                        setState(() {
+                          _gForceModerate = value;
+                          if (_gForceModerate <= _gForceMinimum) {
+                            _gForceModerate = _gForceMinimum + 0.1;
+                          }
+                          if (_gForceSevere <= _gForceModerate) {
+                            _gForceSevere = _gForceModerate + 0.1;
+                          }
+                        });
+                        _saveGForceSettings();
+                      },
+                    ),
+                    const SizedBox(height: 16),
+
+                    Text(
+                      'G-Force Severe: ${_gForceSevere.toStringAsFixed(2)} G',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.purple[700],
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Slider(
+                      value: _gForceSevere,
+                      min: 0.5,
+                      max: 4.0,
+                      divisions: 35,
+                      label: '${_gForceSevere.toStringAsFixed(2)} G',
+                      activeColor: Colors.red[400],
+                      onChanged: (value) {
+                        setState(() {
+                          _gForceSevere = value;
+                          if (_gForceSevere <= _gForceModerate) {
+                            _gForceSevere = _gForceModerate + 0.1;
+                          }
+                        });
+                        _saveGForceSettings();
+                      },
+                    ),
+                  ],
                 ),
               ),
               const SizedBox(height: 16),
@@ -483,6 +604,7 @@ class _CalibrateDrivingMonitorScreenState extends State<CalibrateDrivingMonitorS
   }
 
   void _saveSettings() {
+    _saveGForceSettings();
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Text('Settings saved successfully'),
@@ -490,5 +612,12 @@ class _CalibrateDrivingMonitorScreenState extends State<CalibrateDrivingMonitorS
         duration: Duration(seconds: 2),
       ),
     );
+  }
+
+  Future<void> _saveGForceSettings() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setDouble('gforce_minimum', _gForceMinimum);
+    await prefs.setDouble('gforce_moderate', _gForceModerate);
+    await prefs.setDouble('gforce_severe', _gForceSevere);
   }
 }

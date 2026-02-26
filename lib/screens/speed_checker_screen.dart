@@ -48,10 +48,10 @@ class _SpeedCheckerScreenState extends State<SpeedCheckerScreen> {
   double _gForceForward = 0.0;
   double _gForceBackward = 0.0;
 
-  // G-force thresholds (in Gs)
-  static const double _mildThreshold = 0.15;
-  static const double _moderateThreshold = 0.3;
-  static const double _severeThreshold = 0.5;
+  // G-force thresholds (in Gs) - loaded from settings
+  double _mildThreshold = 0.15;
+  double _moderateThreshold = 0.3;
+  double _severeThreshold = 0.5;
 
   // Warning flash animation
   bool _showWarningFlash = false;
@@ -76,8 +76,9 @@ class _SpeedCheckerScreenState extends State<SpeedCheckerScreen> {
     bool serviceEnabled;
     LocationPermission permission;
 
-    // Load speed calibration data first
+    // Load calibration data first
     await _loadCalibrationData();
+    await _loadGForceSettings();
 
     // Check if location services are enabled
     serviceEnabled = await Geolocator.isLocationServiceEnabled();
@@ -179,23 +180,29 @@ class _SpeedCheckerScreenState extends State<SpeedCheckerScreen> {
     _accelerometerSubscription?.cancel();
     _accelerometerSubscription = accelerometerEventStream().listen(
       (AccelerometerEvent event) {
-        // Phone is vertical and facing driver/passenger
-        // X: left/right (positive = left, negative = right)
-        // Y: forward/backward (positive = forward, negative = backward)
+        // Phone is VERTICAL and facing driver/passenger
+        // X: left/right (positive = left turn, negative = right turn)
+        // Y: up/down (gravity when vertical, ~9.81 m/s²)
+        // Z: forward/backward (positive = braking, negative = acceleration)
+        
         const double g = 9.81;
         
-        // Left/Right G-force (X axis)
+        // Left/Right G-force (X axis) - lateral movement
         final lateralG = event.x / g;
         
-        // Forward/Backward G-force (Y axis)
-        final longitudinalG = event.y / g;
+        // Forward/Backward G-force (Z axis) - subtract small gravity component if any
+        // When phone is vertical, Z is perpendicular to gravity
+        final longitudinalG = event.z / g;
         
         setState(() {
-          _gForceLeft = lateralG > 0 ? lateralG.abs() : 0;
-          _gForceRight = lateralG < 0 ? lateralG.abs() : 0;
-          _gForceForward = longitudinalG > 0 ? longitudinalG.abs() : 0;
-          _gForceBackward = longitudinalG < 0 ? longitudinalG.abs() : 0;
+          _gForceLeft = lateralG > 0.05 ? lateralG.abs() : 0;
+          _gForceRight = lateralG < -0.05 ? lateralG.abs() : 0;
+          _gForceForward = longitudinalG < -0.05 ? longitudinalG.abs() : 0; // Acceleration (negative Z)
+          _gForceBackward = longitudinalG > 0.05 ? longitudinalG.abs() : 0; // Braking (positive Z)
         });
+        
+        // Debug output
+        debugPrint('Accel: x=${event.x.toStringAsFixed(2)}, y=${event.y.toStringAsFixed(2)}, z=${event.z.toStringAsFixed(2)} | G: L=${_gForceLeft.toStringAsFixed(2)} R=${_gForceRight.toStringAsFixed(2)} F=${_gForceForward.toStringAsFixed(2)} B=${_gForceBackward.toStringAsFixed(2)}');
       },
       onError: (error) {
         debugPrint('Accelerometer error: $error');
@@ -295,6 +302,22 @@ class _SpeedCheckerScreenState extends State<SpeedCheckerScreen> {
       // If loading fails, use default values (no calibration)
       _speedCalibrationOffset = 0.0;
       _speedCalibrationMultiplier = 1.0;
+    }
+  }
+
+  /// Load G-force settings from SharedPreferences
+  Future<void> _loadGForceSettings() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      setState(() {
+        _mildThreshold = prefs.getDouble('gforce_minimum') ?? 0.15;
+        _moderateThreshold = prefs.getDouble('gforce_moderate') ?? 0.3;
+        _severeThreshold = prefs.getDouble('gforce_severe') ?? 0.5;
+      });
+    } catch (e) {
+      _mildThreshold = 0.15;
+      _moderateThreshold = 0.3;
+      _severeThreshold = 0.5;
     }
   }
 
